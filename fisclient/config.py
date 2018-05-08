@@ -46,11 +46,6 @@ endpoints = {
         'fis': 'ecs.cn-east-2.myhuaweicloud.com',
         'dns': ['100.125.17.29', '100.125.135.29']
     },
-    'southchina': {
-        'obs': 'obs.cn-north-1.myhwclouds.com',
-        'iam': 'iam.cn-north-1.myhuaweicloud.com',
-        'fis': 'ecs.cn-north-1.myhuaweicloud.com',
-    },
 }
 
 DNS_TIPS = '\n\033[31mNote: Intranet DNS will bring a more stable and fast network environment, but we found that it may NOT be configured correctly. See section "Configuring an Intranet DNS" of the FACS User Guide for more details.\033[0m'
