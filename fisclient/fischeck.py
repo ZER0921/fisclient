@@ -47,6 +47,8 @@ def get_parser():
 
 
 def main():
+    utils.check_login_user()
+
     # parse input option
     argv = [encode.convert_to_unicode(a) for a in sys.argv[1:]]
     args = get_parser().parse_args(argv)
