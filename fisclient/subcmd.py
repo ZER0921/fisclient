@@ -115,8 +115,15 @@ def do_configure(args):
     secret_key_old = cur_conf.get('OS_SECRET_KEY', '')
     region_id_old = cur_conf.get('OS_REGION_ID', '')
     bucket_name_old = cur_conf.get('OS_BUCKET_NAME', '')
+    configure_region_id = False
     try:
         print('Enter new values or accept defaults in brackets with Enter')
+
+        # get region_id from ECS metadata
+        print('\nGetting region_id from ECS metadata.')
+        region_id = rest.get_region_id_from_metadata()
+        if region_id:
+            print('You are in region "%s".' % region_id)
 
         # loop until access_key, secret_key, region_id are OK
         while True:
@@ -136,23 +143,26 @@ def do_configure(args):
                     else:
                         utils.print_err('Error: empty input')
 
-                print('\n\033[31mNote: If an incorrect Region ID is used, the FPGA image registration and querying may succeed, but the FPGA loading will fail.\033[0m')
-                print('Choose the Region where you are located.')
-                regions = config.endpoints.keys()
-                print('Available Regions:')
-                for i, region in enumerate(regions, 1):
-                    print('  (%d) %s' % (i, region))
-                while True:
-                    region_id = raw_input('Region ID [%s]: ' % region_id_old).strip() or region_id_old
-                    if re.match(u'\d+$', region_id) and 1 <= int(region_id) <= len(regions):
-                        region_id = regions[int(region_id)-1]
-                        break
-                    elif region_id in regions:
-                        break
-                    elif not region_id:
-                        utils.print_err('Error: empty input')
-                    else:
-                        utils.print_err('Error: "%s" is not a valid region' % region_id)
+                # configure region_id interactively when get it from ECS metadata failed
+                if region_id is None:
+                    configure_region_id = True
+                    print('\n\033[31mNote: If an incorrect Region ID is used, the FPGA image registration and querying may succeed, but the FPGA loading will fail.\033[0m')
+                    print('Choose the Region where you are located.')
+                    regions = config.endpoints.keys()
+                    print('Available Regions:')
+                    for i, region in enumerate(regions, 1):
+                        print('  (%d) %s' % (i, region))
+                    while True:
+                        region_id = raw_input('Region ID [%s]: ' % region_id_old).strip() or region_id_old
+                        if re.match(u'\d+$', region_id) and 1 <= int(region_id) <= len(regions):
+                            region_id = regions[int(region_id)-1]
+                            break
+                        elif region_id in regions:
+                            break
+                        elif not region_id:
+                            utils.print_err('Error: empty input')
+                        else:
+                            utils.print_err('Error: "%s" is not a valid region' % region_id)
 
                 obs_endpoint = config.get_endpoint(region_id, 'obs')
                 iam_endpoint = config.get_endpoint(region_id, 'iam')
@@ -212,8 +222,12 @@ def do_configure(args):
                     break
 
         # save new settings
-        print('\nNew settings:\n  Access key: %s\n  Secret Key: %s\n  Region ID: %s\n  Bucket Name: %s' %
-              (access_key, secret_key, region_id, bucket_name))
+        if not configure_region_id:
+            print('\nNew settings:\n  Access key: %s\n  Secret Key: %s\n  Bucket Name: %s' %
+                  (access_key, secret_key, bucket_name))
+        else:
+            print('\nNew settings:\n  Access key: %s\n  Secret Key: %s\n  Region ID: %s\n  Bucket Name: %s' %
+                  (access_key, secret_key, region_id, bucket_name))
         save_option = raw_input('Save settings? [Y/n]: ').strip() or 'Y'
         if 'yes'.startswith(save_option.lower()):
             config.save_config(access_key, secret_key, region_id,

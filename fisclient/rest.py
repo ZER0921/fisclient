@@ -28,6 +28,9 @@ import requests
 from auth import sign_request_v4
 from parse_xml import getDictFromXml
 from exception import HttpException
+import config
+import encode
+import utils
 
 
 # disable insecure warning
@@ -288,3 +291,22 @@ def fpga_image_relation_list(ak, sk, project_id, region, host, params=None):
             timeout=timeout,
             verify=cert_verify)
     return resp_with_body_handler(resp)
+
+
+# metadata
+def get_region_id_from_metadata():
+    try:
+        resp = requests.get('http://169.254.169.254/latest/meta-data/placement/availability-zone', timeout=10)
+        az = resp.text.strip()
+        if az in config.az_region_map:
+            return config.az_region_map.get(az)
+    except Exception as e:
+        utils.print_err('Get AZ from ECS metadata failed: %s' % encode.exception_to_unicode(e))
+    try:
+        resp = requests.get('http://169.254.169.254/openstack/latest/meta_data.json', timeout=10)
+        az = resp.json().get('availability_zone')
+        if az in config.az_region_map:
+            return config.az_region_map.get(az)
+    except Exception as e:
+        utils.print_err('Get AZ from ECS metadata failed: %s' % encode.exception_to_unicode(e))
+    utils.print_err('Could not get region_id from ECS metadata.')

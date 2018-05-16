@@ -27,6 +27,16 @@ CONFIG_VAR = ('OS_ACCESS_KEY', 'OS_SECRET_KEY', 'OS_REGION_ID',
               'OS_OBS_ENDPOINT', 'OS_IAM_ENDPOINT', 'OS_FIS_ENDPOINT',
               'OS_CONFIG_HASH')
 
+az_region_map = {
+    'cn-north-1a': 'cn-north-1',
+    'cn-north-1b': 'cn-north-1',
+    'cn-east-2a': 'cn-east-2',
+    'cn-east-2b': 'cn-east-2',
+    'cn-south-1a': 'cn-south-1',
+    'cn-south-2b': 'cn-south-1',
+    'cn-south-1c': 'cn-south-1',
+}
+
 endpoints = {
     'cn-north-1': {
         'obs': 'obs.cn-north-1.myhwclouds.com',
