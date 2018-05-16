@@ -34,7 +34,7 @@ from exception import HttpException
 requests.packages.urllib3.disable_warnings()
 
 timeout = 60
-cert_verify = False
+cert_verify = True
 
 
 # error message
