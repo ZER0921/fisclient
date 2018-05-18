@@ -107,15 +107,16 @@ def do_configure(args):
     """Invoke interactive (re)configuration tool"""
     cur_conf = config.read_current_config()
     if args.dump:
-        for key in ('OS_ACCESS_KEY', 'OS_SECRET_KEY', 'OS_REGION_ID', 'OS_BUCKET_NAME'):
+        for key in ('OS_ACCESS_KEY', 'OS_SECRET_KEY', 'OS_BUCKET_NAME', 'OS_REGION_ID'):
             print("%s = %s" % (key, cur_conf.get(key, '')))
         return
 
     access_key_old = cur_conf.get('OS_ACCESS_KEY', '')
     secret_key_old = cur_conf.get('OS_SECRET_KEY', '')
-    region_id_old = cur_conf.get('OS_REGION_ID', '')
     bucket_name_old = cur_conf.get('OS_BUCKET_NAME', '')
-    configure_region_id = False
+    region_id_old = cur_conf.get('OS_REGION_ID', '')
+    configure_region_id = True
+
     try:
         print('Enter new values or accept defaults in brackets with Enter')
 
@@ -124,28 +125,13 @@ def do_configure(args):
         region_id = rest.get_region_id_from_metadata()
         if region_id:
             print('You are in region "%s".' % region_id)
+            configure_region_id = False
 
         # loop until access_key, secret_key, region_id are OK
         while True:
             try:
-                print('\nAccess key and Secret key are your identifiers for FIS and OBS.')
-                while True:
-                    access_key = raw_input('Access Key [%s]: ' % access_key_old).strip() or access_key_old
-                    if access_key:
-                        break
-                    else:
-                        utils.print_err('Error: empty input')
-
-                while True:
-                    secret_key = raw_input('Secret Key [%s]: ' % secret_key_old).strip() or secret_key_old
-                    if secret_key:
-                        break
-                    else:
-                        utils.print_err('Error: empty input')
-
                 # configure region_id interactively when get it from ECS metadata failed
-                if region_id is None:
-                    configure_region_id = True
+                if configure_region_id:
                     print('\n\033[31mNote: If an incorrect Region ID is used, the FPGA image registration and querying may succeed, but the FPGA loading will fail.\033[0m')
                     print('Choose the Region where you are located.')
                     regions = config.endpoints.keys()
@@ -167,6 +153,21 @@ def do_configure(args):
                 obs_endpoint = config.get_endpoint(region_id, 'obs')
                 iam_endpoint = config.get_endpoint(region_id, 'iam')
                 fis_endpoint = config.get_endpoint(region_id, 'fis')
+
+                print('\nAccess key and Secret key are your identifiers for FIS and OBS.')
+                while True:
+                    access_key = raw_input('Access Key [%s]: ' % access_key_old).strip() or access_key_old
+                    if access_key:
+                        break
+                    else:
+                        utils.print_err('Error: empty input')
+
+                while True:
+                    secret_key = raw_input('Secret Key [%s]: ' % secret_key_old).strip() or secret_key_old
+                    if secret_key:
+                        break
+                    else:
+                        utils.print_err('Error: empty input')
 
                 bucket_list = rest.get_bucket_list(access_key, secret_key, obs_endpoint)
                 project = rest.get_project(access_key, secret_key, region_id, iam_endpoint).get('projects', [])
@@ -226,8 +227,8 @@ def do_configure(args):
             print('\nNew settings:\n  Access key: %s\n  Secret Key: %s\n  Bucket Name: %s' %
                   (access_key, secret_key, bucket_name))
         else:
-            print('\nNew settings:\n  Access key: %s\n  Secret Key: %s\n  Region ID: %s\n  Bucket Name: %s' %
-                  (access_key, secret_key, region_id, bucket_name))
+            print('\nNew settings:\n  Region ID: %s\n  Access key: %s\n  Secret Key: %s\n  Bucket Name: %s' %
+                  (region_id, access_key, secret_key, bucket_name))
         save_option = raw_input('Save settings? [Y/n]: ').strip() or 'Y'
         if 'yes'.startswith(save_option.lower()):
             config.save_config(access_key, secret_key, region_id,
