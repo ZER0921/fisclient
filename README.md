@@ -53,7 +53,6 @@ Set the parameters listed in the following table.
 | --------- | ----------- |
 | **Access Key** | AK (Access Key ID) |
 | **Secret Key** | SK (Secret Access Key) |
-| **Region ID** | Region where the user is located |
 | **Bucket Name** | OBS Bucket for storing the FPGA images to be registered |
 
 > **fisclient** automatically saves the last valid parameter configuration. You can enter new parameter configurations or press **Enter** to use the previous configuration.<br/>
@@ -70,29 +69,7 @@ Secret Key []: a0vet3Eh********************cIr4meJzYSMe
 
 Enter the **Access Key ID** and **Secret Access Key** when prompted.
 
-### Step 2. Configure Region ID ###
-**Region ID** indicates the region where the FACS is used.
-
-| Region | Region ID |
-| ---- | ---- |
-| **CN North-Beijing1** | **cn-north-1** |
-| **CN East-Shanghai2** | **cn-east-2** |
-| **CN South-Guangzhou** | **cn-south-1** |
-
-> If an incorrect Region ID is used, the FPGA image registration and querying may succeed, but the FPGA loading will fail.
-
-<pre>
-Choose the Region where you are located.
-Available Regions:
-  (1) cn-north-1
-  (2) cn-east-2
-  (3) cn-south-1
-Region ID []: 1
-</pre>
-
-When the system prompts you to enter a region ID, enter the serial number of the region where you are located. For example, if you use the FACS in **CN North-Beijing1**, enter the serial number corresponding to **cn-north-1**, that is, **1**.
-
-### Step 3. Configure Bucket Name ###
+### Step 2. Configure Bucket Name ###
 **Bucket Name** indicates the OBS bucket that stores the FPGA images to be registered.
 
 > If you have available buckets in the current region, fisclient will list them all. Select one of them.
@@ -131,13 +108,12 @@ If you want to use an existing OBS bucket, enter the serial number of the OBS bu
 
 > If the name of the bucket to be selected or created conflicts with that in the **Available Bucket(s)** list, add an exclamation mark (!) before the bucket name. That is, use **!mybucket** to indicate that the name of the bucket to be selected or created is **mybucket**.
 
-### Step 4. Confirm and save the configuration ###
+### Step 3. Confirm and save the configuration ###
 After all parameters are configured, **fisclient** asks you whether to save the configuration.
 <pre>
 New settings:
   Access key: a0Vfz5j9********eltR
   Secret Key: a0vet3Eh********************cIr4meJzYSMe
-  Region ID: cn-north-1
   Bucket Name: hello-fpga2
 Save settings? [Y/n]: 
 Configuration saved to "/root/.fiscfg".

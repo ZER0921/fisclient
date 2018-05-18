@@ -52,7 +52,6 @@
 | ---- | ---- |
 | **Access Key** | 接入键标识AK |
 | **Secret Key** | 安全接入键SK |
-| **Region ID** | 用户当前所在的区域 |
 | **Bucket Name** | 用于存放待注册FPGA镜像的OBS桶 |
 
 > **fisclient** 会自动保存用户上一次的有效配置参数。用户在配置过程中，既可以输入新的配置参数，也可以通过输入单个**回车键**来使用上一次的配置参数。<br/>
@@ -70,29 +69,7 @@ Secret Key []: a0vet3Eh********************cIr4meJzYSMe
 当提示输入 **Access Key** 时，请输入用户的**接入键标识（Access Key ID）**。<br/>
 当提示输入 **Secret Key** 时，请输入用户的**安全接入键（Secret Access Key）**。
 
-### 步骤2 配置区域参数 ###
-区域参数 **Region ID** 表示用户在哪一个区域中使用FPGA加速云服务器。<br/>
-
-| 区域 | Region ID |
-| ---- | ---- |
-| **华北-北京一** | **cn-north-1** |
-| **华东-上海二** | **cn-east-2** |
-| **华南-广州** | **cn-south-1** |
-
-> 请注意，错误的Region ID可能仍会使FPGA镜像注册和查询成功，但会使FPGA镜像加载失败。
-
-<pre>
-Choose the Region where you are located.
-Available Regions:
-  (1) cn-north-1
-  (2) cn-east-2
-  (3) cn-south-1
-Region ID []: 1
-</pre>
-
-当提示输入 **Region ID** 时，请输入用户当前所在区域对应的序号。例如，若用户在 **华北-北京一** 使用FPGA加速云服务器，则请输入 **cn-north-1** 对应的序号，即 **1** 。
-
-### 步骤3 配置桶参数 ###
+### 步骤2 配置桶参数 ###
 桶参数 **Bucket Name** 表示存放待注册FPGA镜像的OBS桶。
 
 > 如果用户在当前区域中已经拥有了符合条件的OBS桶，**fisclient** 会罗列出这些桶，用户只需要从中选择一个即可。
@@ -131,13 +108,12 @@ Bucket Name []: 2
 
 > 当用户期望选择或创建的桶名与Available Bucket(s)列表中OBS桶的序号冲突时，用户可以在桶名前添加一个!符号，使用 **!mybucket** 表示期望选择或创建的桶名为 **mybucket**。
 
-### 步骤4 确认并保存 ###
+### 步骤3 确认并保存 ###
 在用户完成所有参数配置后，**fisclient** 会询问用户是否保存新的配置。
 <pre>
 New settings:
   Access key: a0Vfz5j9********eltR
   Secret Key: a0vet3Eh********************cIr4meJzYSMe
-  Region ID: cn-north-1
   Bucket Name: hello-fpga2
 Save settings? [Y/n]: 
 Configuration saved to "/root/.fiscfg".
