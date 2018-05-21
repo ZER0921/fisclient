@@ -85,9 +85,13 @@ def main():
     domain_id = os.getenv('OS_DOMAIN_ID')
     project_id = os.getenv('OS_PROJECT_ID')
     obs_endpoint = os.getenv('OS_OBS_ENDPOINT')
+    vpc_endpoint = os.getenv('OS_VPC_ENDPOINT')
     fis_endpoint = os.getenv('OS_FIS_ENDPOINT')
 
     try:
+        # configure intranet dns of ecs
+        config.configure_intranet_dns_ecs(region_id)
+
         # check bucket
         utils._check_bucket_acl_location(bucket_name, access_key, secret_key,
                                          obs_endpoint, region_id, domain_id)
@@ -101,9 +105,6 @@ def main():
         print('fis argument(s) and config file are OK')
     else:
         print('fis config file is OK')
-
-    # check intranet dns
-    config.check_intranet_dns(region_id)
 
 
 if __name__ == '__main__':

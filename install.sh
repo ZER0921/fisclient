@@ -36,5 +36,7 @@ done
 
 echo -e "\n~~~~~~~~~~~~~~~~ install fisclient ~~~~~~~~~~~~~~~~"
 python setup.py install
-
-echo -e "\n~~~~~~~~~~~~~~~~ install success ~~~~~~~~~~~~~~~~"
+if [ $? -ne 0 ]; then
+    echo -e "\n~~~~~~~~~~~~~~~~ install fisclient failed ~~~~~~~~~~~~~~~~"
+    exit -1
+fi
