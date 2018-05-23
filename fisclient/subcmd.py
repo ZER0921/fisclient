@@ -154,7 +154,7 @@ def do_configure(args):
         # configure intranet dns of ecs
         config.configure_intranet_dns_ecs(region_id)
 
-        # loop until access_key, secret_key, region_id are OK
+        # loop until access_key, secret_key are OK
         while True:
             try:
                 print('\nAccess key and Secret key are your identifiers for FIS and OBS.')
@@ -225,7 +225,7 @@ def do_configure(args):
                     break
 
         # configure intranet dns of vpc
-        print('\nConfiguring intranet DNS of VPC.')
+        print('\nChecking intranet DNS of VPC.')
         config.configure_intranet_dns_vpc(access_key, secret_key, project_id, region_id, vpc_endpoint)
 
         # save new settings

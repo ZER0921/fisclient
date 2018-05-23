@@ -96,7 +96,8 @@ def resp_without_body(resp):
 
 def resp_with_text_error(resp):
     if resp.status_code >= 300:
-        raise HttpException(resp.status_code, resp.reason, get_text_error(resp.text))
+        func = sys._getframe().f_back.f_code.co_name
+        raise HttpException(resp.status_code, resp.reason, get_text_error(resp.text, func))
     try:
         return resp.json()
     except Exception:

@@ -24,8 +24,8 @@ import utils
 
 CONFIG_FILE = '~/.fiscfg'
 CONFIG_TIPS = 'Consider running \033[31mfis configure\033[0m command to (re)create one.'
-CONFIG_VAR = ('OS_ACCESS_KEY', 'OS_SECRET_KEY', 'OS_REGION_ID',
-              'OS_BUCKET_NAME', 'OS_DOMAIN_ID', 'OS_PROJECT_ID',
+CONFIG_VAR = ('OS_ACCESS_KEY', 'OS_SECRET_KEY', 'OS_BUCKET_NAME',
+              'OS_REGION_ID', 'OS_DOMAIN_ID', 'OS_PROJECT_ID',
               'OS_OBS_ENDPOINT', 'OS_IAM_ENDPOINT', 'OS_VPC_ENDPOINT',
               'OS_FIS_ENDPOINT', 'OS_CONFIG_HASH')
 
@@ -107,14 +107,14 @@ def configure_intranet_dns_vpc(ak, sk, project_id, region, host):
             dns_body = {'subnet': {'name': subnet.get('name'), 'primary_dns': dns[0], 'secondary_dns': dns[1]}}
             rest.put_subnet(ak, sk, project_id, region, host, vpc_id, net_id, json.dumps(dns_body))
     except Exception as e:
-        utils.print_err('Configure intranet DNS of VPC failed: %s' % encode.exception_to_unicode(e))
+        msg = encode.exception_to_unicode(e)
+        if getattr(e, 'code', None) == 404:
+            msg += ', \033[31mTips=Maybe you are not in your own ECS\033[0m'
+        utils.print_err('Check intranet DNS of VPC failed: %s' % msg)
 
 
 def get_endpoint(region_id, service):
-    if region_id in endpoints:
-        return endpoints.get(region_id).get(service)
-    else:
-        return endpoints.get('cn-north-1').get(service)
+    return endpoints.get(region_id).get(service)
 
 
 def _read_config_and_update(config_file, update_dict):
@@ -122,7 +122,7 @@ def _read_config_and_update(config_file, update_dict):
         line = line.rstrip()
         if line and not line.startswith('#'):
             words = [word.strip() for word in line.split('=')]
-            if len(words) == 2 and words[1] and words[0] in CONFIG_VAR:
+            if len(words) == 2 and words[0] in CONFIG_VAR and words[1]:
                 update_dict[words[0]] = words[1]
 
 
