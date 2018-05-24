@@ -30,18 +30,11 @@ For other environments, availability is not ensured.
 
 <a name="installation"></a>
 # 2 Installing fisclient #
-Before installing fisclient, ensure that you have logged in to the ECS as the **root** user.
+- Step 1. Log in to the ECS as **root**.
 
-### Step 1. Download the source code package ###
-- Run the `git clone https://github.com/Huawei/huaweicloud-fpga.git` command to download the **fisclient** source code package.
+- Step 2. Go to the **huaweicloud-fpga/cli/fisclient** directory of the **FPGA Development Suite**.
 
-> Skip this step if you have downloaded the [FPGA Development Suite](https://github.com/Huawei/huaweicloud-fpga/blob/master/README.md).<br/>
-> Before downloading the **fisclient** source code package, ensure that no file or directory named **huaweicloud-fpga** exists in the current directory.
-
-### Step 2. Install fisclient ###
-- Run the `cd huaweicloud-fpga/cli/fisclient` command to go to the **huaweicloud-fpga/cli/fisclient** directory of the **FPGA Development Suite**.
-
-- Run the `bash install.sh` command to install **fisclient**.
+- Step 3. Run the `bash install.sh` command to install **fisclient**.
 
 <a name="configuration"></a>
 # 3 Configuring fisclient #

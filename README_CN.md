@@ -29,18 +29,11 @@
 
 <a name="installation"></a>
 # 2 安装 #
-在安装之前，用户首先要确保已经以 **root** 身份登录弹性云服务器。
+- 步骤1：以 **root** 用户登录弹性云服务器。
 
-### 步骤1 下载源码包 ###
-- 执行 **git clone https://github.com/Huawei/huaweicloud-fpga.git** 命令下载 **fisclient** 源码包。
+- 步骤2：切换到 **FPGA开发套件** 的 **huaweicloud-fpga/cli/fisclient** 目录。
 
-> 如果用户已经下载了[FPGA开发套件](https://github.com/Huawei/huaweicloud-fpga/blob/master/README_CN.md)，则可以跳过本步骤。<br/>
-> 下载 **fisclient** 源码包时，请确保当前目录下没有以 **huaweicloud-fpga** 命名的文件或目录。
-
-### 步骤2 安装fisclient ###
-- 执行 **cd huaweicloud-fpga/cli/fisclient** 命令切换到 **FPGA开发套件** 的 **huaweicloud-fpga/cli/fisclient** 目录。
-
-- 执行 **bash install.sh** 命令安装fisclient工具。
+- 步骤3：执行 **bash install.sh** 命令安装fisclient工具。
 
 <a name="configuration"></a>
 # 3 配置 #
