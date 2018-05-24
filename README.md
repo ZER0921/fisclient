@@ -33,19 +33,19 @@ For other environments, availability is not ensured.
 Before installing fisclient, ensure that you have logged in to the ECS as the **root** user.
 
 ### Step 1. Download the source code package ###
-- Run the **git clone https://github.com/Huawei/huaweicloud-fpga.git** command to download the **fisclient** source code package.
+- Run the `git clone https://github.com/Huawei/huaweicloud-fpga.git` command to download the **fisclient** source code package.
 
 > Skip this step if you have downloaded the [FPGA Development Suite](https://github.com/Huawei/huaweicloud-fpga/blob/master/README.md).<br/>
 > Before downloading the **fisclient** source code package, ensure that no file or directory named **huaweicloud-fpga** exists in the current directory.
 
 ### Step 2. Install fisclient ###
-- Run the **cd huaweicloud-fpga/cli/fisclient** command to go to the **huaweicloud-fpga/cli/fisclient** directory of the **FPGA Development Suite**.
+- Run the `cd huaweicloud-fpga/cli/fisclient` command to go to the **huaweicloud-fpga/cli/fisclient** directory of the **FPGA Development Suite**.
 
-- Run the **bash install.sh** command to install **fisclient**.
+- Run the `bash install.sh` command to install **fisclient**.
 
 <a name="configuration"></a>
 # 3 Configuring fisclient #
-Run the **fis configure** command to configure **fisclient**.<br/>
+Run the `fis configure` command to configure **fisclient**.<br/>
 
 Set the parameters listed in the following table.
 
@@ -56,7 +56,7 @@ Set the parameters listed in the following table.
 | **Bucket Name** | OBS Bucket for storing the FPGA images to be registered |
 
 > **fisclient** automatically saves the last valid parameter configuration. You can enter new parameter configurations or press **Enter** to use the previous configuration.<br/>
-> After the configuration is complete, you can run the **fis configure --dump** command to view the current configuration.
+> After the configuration is complete, you can run the `fis configure --dump` command to view the current configuration.
 
 ### Step 1. Configure key parameters ###
 Before configuring key parameters, create and obtain an access key by following instructions in [Creating Access Keys](https://support.huaweicloud.com/en-us/clientogw-obs/en-us_topic_0045853769.html).
@@ -74,7 +74,7 @@ Enter the **Access Key ID** and **Secret Access Key** when prompted.
 
 > If you have available buckets in the current region, fisclient will list them all. Select one of them.
 
-- Create a new OBS bucket
+#### Create a new OBS bucket ####
 
 <pre>
 Choose or Create a Bucket for storing the FPGA images to be registered.
@@ -95,7 +95,7 @@ If your do not have any available buckets in the current region, or you just wan
 > - Cannot contain periods (.) and hyphens (-) adjacent to each other
 > - Cannot be an IP address
 
-- Choose an existing OBS bucket
+#### Choose an existing OBS bucket ####
 
 <pre>
 Choose or Create a Bucket for storing the FPGA images to be registered.
@@ -126,7 +126,7 @@ If you do not want to save the configuration, type **n**.
 ## 4.1 fis Command ##
 Run the **fis** command on the Linux shell to manage FPGA images.<br/>
 
-The format of a fis command is **fis &lt;subcommand&gt; &lt;option&gt;**.
+The format of a fis command is `fis <subcommand> <option>`.
 
 - **&lt;subcommand&gt;** specifies the function of the command.
 - **&lt;option&gt;** is unique to the subcommand and specifies command parameters for the subcommand.
@@ -221,7 +221,7 @@ If user A wants to share a self-owned registered FPGA image with user B, user A 
 - Step 2. Obtain the image ID from the details page of the created private ECS image. The following assumes that the image ID of the created private ECS image is **404223ca-8\*\*b-4\*\*2-a\*\*e-d187\*\*\*\*61bc**.
 - Step 3. Associate the FPGA image to be shared with the created private ECS image.
 
-User A needs to log in to the FPGA Elastic Cloud Server, run a fis association subcommand to associate the FPGA image with the private ECS image.
+User A needs to log in to the FPGA Elastic Cloud Server, run the fis association subcommand to associate the FPGA image with the private ECS image.
 <pre>
 [root@ ~]# fis fpga-image-relation-create --fpga-image-id 4010b39c5d4**********f2cf8070c7e --image-id 404223ca-8**b-4**2-a**e-d187****61bc
 Success: 204 No Content
@@ -243,7 +243,7 @@ If user B wants to use a registered FPGA image shared by user A, user B needs to
 - Step 4. Obtain the image ID from the details page of the shared ECS image. In this example, it is **404223ca-8\*\*b-4\*\*2-a\*\*e-d187\*\*\*\*61bc**.
 - Step 5. Query the FPGA image shared by user A using the image ID of the shared ECS image.
 
-User B needs to log in to the FPGA Elastic Cloud Server created from the ECS image shared by user A, run a fis association query subcommand (set the **image-id** parameter to the image ID of the shared ECS image) to check for the FPGA image shared by user A.
+User B needs to log in to the FPGA Elastic Cloud Server created from the ECS image shared by user A, run the fis association query subcommand (set the **image-id** parameter to the image ID of the shared ECS image) to check for the FPGA image shared by user A.
 <pre>
 [root@ ~]# fis fpga-image-relation-list --image-id 404223ca-8**b-4**2-a**e-d187****61bc
 Success: 200 OK
@@ -253,7 +253,7 @@ Success: 200 OK
 | 404223ca-8**b-4**2-a**e-d187****61bc | 4010b39c5d4**********f2cf8070c7e | name123 | active | True      | 39   | 2017-09-19 03:27:31 | desc123     |  {"manifest_format_version": "1", "pci_vendor_id": "0x19e5", "pci_device_id": "0xD512", "pci_subsystem_id": "-", "pci_subsystem_vendor_id": "-", "shell_type": "0x121", "shell_version": "0x0001", "hdk_version": "SDx 2017.1", "date": "2017/09/18_19:27:12"} |         |
 +--------------------------------------+----------------------------------+---------+--------+-----------+------+---------------------+-------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+---------+
 </pre>
-The output shows that the ID of the FPGA image shared by user A shared is **4010b39c5d4\*\*\*\*\*\*\*\*\*\*f2cf8070c7e**. User B can use the ID for loading.
+The output shows that the ID of the FPGA image shared by user A is **4010b39c5d4\*\*\*\*\*\*\*\*\*\*f2cf8070c7e**. User B can use the ID for loading.
 
 ### Canceling the FPGA Image Sharing ###
 If user A wants to stop sharing the FPGA image with user B, user A needs to perform the following operations:
@@ -261,7 +261,7 @@ If user A wants to stop sharing the FPGA image with user B, user A needs to perf
 - Step 1. Cancel the image sharing with user B. For more details, see [Canceling the Image Sharing](https://support.huaweicloud.com/en-us/usermanual-ims/en-us_topic_0032087324.html).
 - Step 2. Disassociate the shared FPGA image from the private ECS image.
 
-User A needs to log in to the FPGA Elastic Cloud Server, run a fis disassociation subcommand to disassociate the shared FPGA image from the private ECS image.
+User A needs to log in to the FPGA Elastic Cloud Server, run the fis disassociation subcommand to disassociate the shared FPGA image from the private ECS image.
 <pre>
 [root@ ~]# fis fpga-image-relation-delete --fpga-image-id 4010b39c5d4**********f2cf8070c7e --image-id 404223ca-8**b-4**2-a**e-d187****61bc
 Success: 204 No Content
@@ -271,7 +271,7 @@ If **Success: 204 No Content** is displayed, the disassociation is successful.
 <a name="fis-command-description"></a>
 # 5 fis Command Description #
 ## 5.1 Viewing Help Information ##
-Run the **fis help** command to view help information of fis command and run the **fis help &lt;subcommand&gt;** command to view help information of fis subcommands.
+Run the `fis help` command to view help information of fis command and run the `fis help <subcommand>` command to view help information of fis subcommands.
 <pre>
 [root@ ~]# fis help 
 usage: fis &lt;subcommand&gt; ... 
@@ -296,7 +296,7 @@ positional arguments:
 See "fis help COMMAND" for help on a specific command.
 </pre>
 
-The format of a fis command is **fis &lt;subcommand&gt; &lt;option&gt;**.
+The format of a fis command is `fis <subcommand> <option>`.
 
 - **&lt;subcommand&gt;** specifies the function of the command.
 - **&lt;option&gt;** is unique to the subcommand and specifies command parameters for the subcommand.
@@ -308,7 +308,7 @@ fis commands include eight subcommands.
 | **configure** | Configuration subcommand, used to invoke interactive configuration tool. |
 | **fpga-image-delete** | Deletion subcommand, used to delete an FPGA image. |
 | **fpga-image-list** | Query subcommand, used to query FPGA images of a tenant. |
-| **fpga-image-register** | Registration subcommand, to register an FPGA image. |
+| **fpga-image-register** | Registration subcommand, used to register an FPGA image. |
 | **fpga-image-relation-create** | Association subcommand, used to associate an FPGA image with an ECS image. |
 | **fpga-image-relation-delete** | Disassociation subcommand, used to disassociate an FPGA image from an ECS image. |
 | **fpga-image-relation-list** | Association query subcommand, used to query the associations between FPGA images and ECS images visible to a tenant. |

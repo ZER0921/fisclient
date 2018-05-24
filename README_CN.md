@@ -74,7 +74,7 @@ Secret Key []: a0vet3Eh********************cIr4meJzYSMe
 
 > 如果用户在当前区域中已经拥有了符合条件的OBS桶，**fisclient** 会罗列出这些桶，用户只需要从中选择一个即可。
 
-- 创建新的OBS桶
+#### 创建新的OBS桶 ####
 
 <pre>
 Choose or Create a Bucket for storing the FPGA images to be registered.
@@ -95,7 +95,7 @@ Bucket "hello-fpga2" created
 > - 禁止"."和"-"相邻（如"my-.bucket"和"my.-bucket"）
 > - 禁止使用IP地址
 
-- 使用已有的OBS桶
+#### 使用已有的OBS桶 ####
 
 <pre>
 Choose or Create a Bucket for storing the FPGA images to be registered.
