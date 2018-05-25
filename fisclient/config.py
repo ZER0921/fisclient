@@ -22,7 +22,7 @@ import rest
 import utils
 
 
-CONFIG_FILE = '~/.fiscfg'
+CONFIG_FILE = os.path.expanduser('~/.fiscfg')
 CONFIG_TIPS = 'Consider running \033[31mfis configure\033[0m command to (re)create one.'
 CONFIG_VAR = ('OS_ACCESS_KEY', 'OS_SECRET_KEY', 'OS_BUCKET_NAME',
               'OS_REGION_ID', 'OS_DOMAIN_ID', 'OS_PROJECT_ID',
@@ -34,6 +34,7 @@ az_region_map = {
     'cn-north-1b': 'cn-north-1',
     'cn-east-2a': 'cn-east-2',
     'cn-east-2b': 'cn-east-2',
+    'cn-east-2c': 'cn-east-2',
     'cn-south-1a': 'cn-south-1',
     'cn-south-2b': 'cn-south-1',
     'cn-south-1c': 'cn-south-1',
@@ -129,7 +130,7 @@ def _read_config_and_update(config_file, update_dict):
 def read_config_and_verify():
     """read the current configurations"""
     try:
-        with open(os.path.expanduser(CONFIG_FILE), 'r') as config_file:
+        with open(CONFIG_FILE, 'r') as config_file:
             _read_config_and_update(config_file, os.environ)
 
             config_hash = utils.compute_md5(os.getenv('OS_ACCESS_KEY'),
@@ -143,9 +144,9 @@ def read_config_and_verify():
                                             os.getenv('OS_VPC_ENDPOINT'),
                                             os.getenv('OS_FIS_ENDPOINT'))
             if config_hash != os.getenv('OS_CONFIG_HASH'):
-                raise exception.FisException('Config file is damaged')
+                raise exception.FisException('%s is corrupted' % CONFIG_FILE)
     except Exception as e:
-        utils.exit('Read config file failed: %s\n%s' % (
+        utils.exit('Read configuration file failed: %s\n%s' % (
                    encode.exception_to_unicode(e),
                    CONFIG_TIPS))
 
@@ -154,7 +155,7 @@ def read_current_config():
     """read the default configurations"""
     default = {}
     try:
-        with open(os.path.expanduser(CONFIG_FILE), 'r') as config_file:
+        with open(CONFIG_FILE, 'r') as config_file:
             _read_config_and_update(config_file, default)
     except Exception:
         pass
@@ -169,7 +170,7 @@ def save_config(access_key, secret_key, bucket_name,
                                     region_id, domain_id, project_id,
                                     obs_endpoint, iam_endpoint, vpc_endpoint,
                                     fis_endpoint)
-    with open(os.path.expanduser(CONFIG_FILE), 'w') as config_file:
+    with open(CONFIG_FILE, 'w') as config_file:
         config_file.write('%s = %s\n' % ('OS_ACCESS_KEY', access_key))
         config_file.write('%s = %s\n' % ('OS_SECRET_KEY', secret_key))
         config_file.write('%s = %s\n' % ('OS_BUCKET_NAME', bucket_name))

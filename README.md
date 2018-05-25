@@ -32,7 +32,7 @@ For other environments, availability is not ensured.
 # 2 Installing fisclient #
 - Step 1. Log in to the ECS as **root**.
 
-- Step 2. Go to the **huaweicloud-fpga/cli/fisclient** directory of the **FPGA Development Suite**.
+- Step 2. Go to the **cli/fisclient** directory of the **FPGA Development Suite**.
 
 - Step 3. Run the `bash install.sh` command to install **fisclient**.
 
@@ -67,7 +67,7 @@ Enter the **Access Key ID** and **Secret Access Key** when prompted.
 
 > If you have available buckets in the current region, fisclient will list them all. Select one of them.
 
-#### Create a new OBS bucket ####
+#### Example 1. Create a new OBS bucket ####
 
 <pre>
 Choose or Create a Bucket for storing the FPGA images to be registered.
@@ -88,7 +88,7 @@ If your do not have any available buckets in the current region, or you just wan
 > - Cannot contain periods (.) and hyphens (-) adjacent to each other
 > - Cannot be an IP address
 
-#### Choose an existing OBS bucket ####
+#### Example 2. Choose an existing OBS bucket ####
 
 <pre>
 Choose or Create a Bucket for storing the FPGA images to be registered.
