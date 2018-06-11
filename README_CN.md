@@ -37,7 +37,9 @@
 
 <a name="configuration"></a>
 # 3 配置 #
-用户需要执行 **fis configure** 命令来进行 **fisclient** 工具的配置。<br/>
+用户需要执行 **fis configure** 命令来进行 **fisclient** 工具的配置。
+- 请确保弹性云服务器可以正常访问ECS元数据，更多详细信息请参见[元数据](https://support.huaweicloud.com/usermanual-ecs/zh-cn_topic_0042400609.html)的 **前提条件** 小节。
+- **fisclient** 会为弹性云服务器配置内网DNS。关于内网DNS的更多详细信息请参见[华为云提供的内网DNS](https://support.huaweicloud.com/dns_faq/dns_faq_002.html)。
 
 在配置过程中，用户需要输入以下参数：
 

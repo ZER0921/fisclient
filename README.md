@@ -38,7 +38,9 @@ For other environments, availability is not ensured.
 
 <a name="configuration"></a>
 # 3 Configuring fisclient #
-Run the `fis configure` command to configure **fisclient**.<br/>
+Run the `fis configure` command to configure **fisclient**.
+- Ensure that the metadata can be accessed from your ECS. For more details, see the **Prerequisites** section in the [Managing ECS Metadata](https://support.huaweicloud.com/en-us/usermanual-ecs/en-us_topic_0042400609.html).
+- **fisclient** will configure private DNS for your ECS. For more details about private DNS, see [The Private DNS Server Provided by HUAWEI CLOUD DNS](https://support.huaweicloud.com/en-us/dns_faq/dns_faq_002.html).
 
 Set the parameters listed in the following table.
 
