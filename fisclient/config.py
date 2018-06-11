@@ -28,6 +28,7 @@ CONFIG_VAR = ('OS_ACCESS_KEY', 'OS_SECRET_KEY', 'OS_BUCKET_NAME',
               'OS_REGION_ID', 'OS_DOMAIN_ID', 'OS_PROJECT_ID',
               'OS_OBS_ENDPOINT', 'OS_IAM_ENDPOINT', 'OS_VPC_ENDPOINT',
               'OS_FIS_ENDPOINT', 'OS_CONFIG_HASH')
+DNS_CONFIG_FILE = '/etc/resolv.conf'
 
 az_region_map = {
     'cn-north-1a': 'cn-north-1',
@@ -70,18 +71,19 @@ def configure_intranet_dns_ecs(region):
         dns = endpoints.get(region, {}).get('dns')
         if dns is None:
             return
-        with open('/etc/resolv.conf') as resolv:
-            record = []
-            for line in resolv:
-                record = line.split()
-                if len(record) < 2:
-                    continue
-                if record[0] == 'nameserver':
-                    break
-            if len(record) >= 2 and record[0] == 'nameserver' and record[1] in dns:
-                configure_dns = False
-            else:
-                configure_dns = True
+
+        configure_dns = True
+        if os.path.exists(DNS_CONFIG_FILE):
+            with open(DNS_CONFIG_FILE) as resolv:
+                record = []
+                for line in resolv:
+                    record = line.split()
+                    if len(record) < 2:
+                        continue
+                    if record[0] == 'nameserver':
+                        break
+                if len(record) >= 2 and record[0] == 'nameserver' and record[1] in dns:
+                    configure_dns = False
 
         if configure_dns:
             with open('/etc/resolv.conf', 'w') as resolv:
