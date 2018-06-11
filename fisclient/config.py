@@ -91,7 +91,7 @@ def configure_intranet_dns_ecs(region):
                 resolv.write('nameserver %s\n' % dns[0])
                 resolv.write('nameserver %s\n' % dns[1])
     except Exception as e:
-        utils.print_err('Configure intranet DNS of ECS failed: %s' % encode.exception_to_unicode(e))
+        utils.print_err('Configure private DNS of ECS failed: %s' % encode.exception_to_unicode(e))
 
 
 def configure_intranet_dns_vpc(ak, sk, project_id, region, host):
@@ -113,7 +113,7 @@ def configure_intranet_dns_vpc(ak, sk, project_id, region, host):
         msg = encode.exception_to_unicode(e)
         if getattr(e, 'code', None) == 404:
             msg += ', \033[31mTips=Maybe you are not in your own ECS\033[0m'
-        utils.print_err('Check intranet DNS of VPC failed: %s' % msg)
+        utils.print_err('Check private DNS of VPC failed: %s' % msg)
 
 
 def get_endpoint(region_id, service):

@@ -225,7 +225,7 @@ def do_configure(args):
                     break
 
         # configure intranet dns of vpc
-        print('\nChecking intranet DNS of VPC.')
+        print('\nChecking private DNS of VPC.')
         config.configure_intranet_dns_vpc(access_key, secret_key, project_id, region_id, vpc_endpoint)
 
         # save new settings
