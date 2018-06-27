@@ -23,7 +23,8 @@
 # 1 Requirements on the Operating Environment #
 **fisclient** is developed and tested in the following environments:
 
-- CentOS 7.3
+- FPGA Elastic Cloud Server
+- CentOS 7.3 64 bit
 - Python 2.7
 
 For other environments, availability is not ensured.
