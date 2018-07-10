@@ -76,12 +76,6 @@ def compute_md5(*args):
     return m.hexdigest()
 
 
-def check_login_user():
-    user = getpass.getuser()
-    if user != 'root':
-        exit('Please run as root. (Current user is %s)' % user)
-
-
 def _check_bucket_acl_location(bucket_name, ak, sk, host, region_id, domain_id):
     location = rest.get_bucket_location(ak, sk, bucket_name, host)
     location = location.get('LocationConstraint')
