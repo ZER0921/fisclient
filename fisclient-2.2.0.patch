@@ -1,0 +1,1141 @@
+diff -uprN fisclient-2.1.0/fisclient/config.py fisclient-2.2.0/fisclient/config.py
+--- fisclient-2.1.0/fisclient/config.py	2018-08-22 12:21:15.000000000 +0800
++++ fisclient-2.2.0/fisclient/config.py	2018-09-03 21:20:55.000000000 +0800
+@@ -39,6 +39,9 @@ az_region_map = {
+     'cn-south-1a': 'cn-south-1',
+     'cn-south-2b': 'cn-south-1',
+     'cn-south-1c': 'cn-south-1',
++    'az1.dc1': 'southchina',
++    'kvmxen.dc1': 'southchina',
++    'eu-de-02': 'eu-de',
+ }
+ 
+ endpoints = {
+@@ -63,6 +66,26 @@ endpoints = {
+         'fis': 'ecs.cn-east-2.myhuaweicloud.com',
+         'dns': ['100.125.17.29', '100.125.135.29']
+     },
++    'southchina': {
++        'obs': 'obs.cn-north-1.myhwclouds.com',
++        'iam': 'iam.cn-north-1.myhuaweicloud.com',
++        'vpc': 'vpc.cn-north-1.myhuaweicloud.com',
++        'fis': 'ecs.cn-north-1.myhuaweicloud.com',
++        'dns': ['100.125.1.202', '100.125.1.230']
++    },
++    'eu-de': {
++        'obs': 'obs.eu-de.otc.t-systems.com',
++        'iam': 'iam.eu-de.otc.t-systems.com',
++        'vpc': 'vpc.eu-de.otc.t-systems.com',
++        'fis': 'ecs.eu-de.otc.t-systems.com',
++        'dns': ['100.125.1.53', '100.125.1.54']
++    },
++    'cn-global-1-a': {
++        'obs': '192.168.26.20',
++        'iam': '128.6.147.250',
++        'vpc': '128.6.147.250',
++        'fis': '128.6.147.250',
++    }
+ }
+ 
+ 
+@@ -94,21 +117,21 @@ def configure_intranet_dns_ecs(region):
+         utils.print_err('Configure private DNS of ECS failed: %s' % encode.exception_to_unicode(e))
+ 
+ 
+-def configure_intranet_dns_vpc(ak, sk, project_id, region, host):
++def configure_intranet_dns_vpc(ak, sk, project_id, region, ecs_host, vpc_host):
+     try:
+         dns = endpoints.get(region, {}).get('dns')
+         instance_id = rest.get_instance_id_from_metadata()
+         if dns is None or instance_id is None:
+             return
+-        nics = rest.get_os_interface(ak, sk, project_id, region, host, instance_id)
++        nics = rest.get_os_interface(ak, sk, project_id, region, ecs_host, instance_id)
+         for nic in nics.get('interfaceAttachments', []):
+             net_id = nic.get('net_id')
+-            subnet = rest.get_subnet(ak, sk, project_id, region, host, net_id).get('subnet', {})
++            subnet = rest.get_subnet(ak, sk, project_id, region, vpc_host, net_id).get('subnet', {})
+             if subnet.get('primary_dns') in dns:
+                 continue
+             vpc_id = subnet.get('vpc_id')
+             dns_body = {'subnet': {'name': subnet.get('name'), 'primary_dns': dns[0], 'secondary_dns': dns[1]}}
+-            rest.put_subnet(ak, sk, project_id, region, host, vpc_id, net_id, json.dumps(dns_body))
++            rest.put_subnet(ak, sk, project_id, region, vpc_host, vpc_id, net_id, json.dumps(dns_body))
+     except Exception as e:
+         msg = encode.exception_to_unicode(e)
+         if getattr(e, 'code', None) == 404:
+diff -uprN fisclient-2.1.0/fisclient/fischeck.py fisclient-2.2.0/fisclient/fischeck.py
+--- fisclient-2.1.0/fisclient/fischeck.py	2018-08-22 12:21:15.000000000 +0800
++++ fisclient-2.2.0/fisclient/fischeck.py	2018-09-03 21:20:55.000000000 +0800
+@@ -27,13 +27,13 @@ def get_parser():
+     parser = argparse.ArgumentParser(
+         prog='fischeck',
+         add_help=False)
+-    parser.add_argument('--name',
++    parser.add_argument('--dcp-obs-path',
+                         action='store')
+-    parser.add_argument('--metadata',
++    parser.add_argument('--log-obs-directory',
+                         action='store')
+-    parser.add_argument('--description',
++    parser.add_argument('--name',
+                         action='store')
+-    parser.add_argument('--file-name',
++    parser.add_argument('--description',
+                         action='store')
+     parser.add_argument('--fpga-image-id',
+                         action='store')
+@@ -53,14 +53,14 @@ def main():
+ 
+     # read and check args
+     kwargs = {}
++    if args.dcp_obs_path is not None:
++        kwargs['dcp_obs_path'] = args.dcp_obs_path
++    if args.log_obs_directory is not None:
++        kwargs['log_obs_directory'] = args.log_obs_directory
+     if args.name is not None:
+         kwargs['name'] = args.name
+-    if args.metadata is not None:
+-        kwargs['metadata'] = args.metadata
+     if args.description is not None:
+         kwargs['description'] = args.description
+-    if args.file_name is not None:
+-        kwargs['file_name'] = args.file_name
+     if args.fpga_image_id is not None:
+         kwargs['fpga_image_id'] = args.fpga_image_id
+     if args.image_id is not None:
+@@ -83,7 +83,6 @@ def main():
+     domain_id = os.getenv('OS_DOMAIN_ID')
+     project_id = os.getenv('OS_PROJECT_ID')
+     obs_endpoint = os.getenv('OS_OBS_ENDPOINT')
+-    vpc_endpoint = os.getenv('OS_VPC_ENDPOINT')
+     fis_endpoint = os.getenv('OS_FIS_ENDPOINT')
+ 
+     try:
+diff -uprN fisclient-2.1.0/fisclient/fis.py fisclient-2.2.0/fisclient/fis.py
+--- fisclient-2.1.0/fisclient/fis.py	2018-08-22 12:21:15.000000000 +0800
++++ fisclient-2.2.0/fisclient/fis.py	2018-09-03 21:20:55.000000000 +0800
+@@ -69,7 +69,7 @@ def main():
+ 
+     argv = [encode.convert_to_unicode(a) for a in sys.argv[1:]]
+     args = parser.parse_args(argv)
+-    if args.subcmd.startswith('fpga-image'):
++    if args.subcmd.startswith('fpga-image') or args.subcmd == 'get-log-file':
+         config.read_config_and_verify()
+     elif args.subcmd == 'help':
+         args.subcommands = subcommands
+diff -uprN fisclient-2.1.0/fisclient/rest.py fisclient-2.2.0/fisclient/rest.py
+--- fisclient-2.1.0/fisclient/rest.py	2018-08-22 12:21:15.000000000 +0800
++++ fisclient-2.2.0/fisclient/rest.py	2018-09-03 21:20:55.000000000 +0800
+@@ -163,7 +163,8 @@ def make_bucket(ak, sk, bucket_name, loc
+     return (resp.status_code, resp.reason)
+ 
+ 
+-def put_object(ak, sk, file_name, bucket_name, object_key, host):
++@utils.retry_decorator
++def put_dcp_file(ak, sk, file_name, bucket_name, object_key, host):
+     expand_file_name = os.path.expanduser(file_name)
+     with open(expand_file_name, 'rb') as f:
+         m = hashlib.md5()
+@@ -199,6 +200,34 @@ def put_object(ak, sk, file_name, bucket
+         return (resp.status_code, resp.reason, content_length, time_diff)
+ 
+ 
++def get_log_file(ak, sk, file_name, bucket_name, object_key, host):
++    resource = '/%s/%s' % (bucket_name, object_key)
++    date = time.strftime("%a, %d %b %Y %H:%M:%S +0000", time.gmtime())
++    string_to_sign = 'GET\n\n\n%s\n%s' % (date, resource)
++    signature = base64.b64encode(hmac.new(sk, string_to_sign, hashlib.sha1).digest())
++
++    t1 = datetime.datetime.now()
++    resp = requests.get(
++            'https://%s%s' % (host, resource),
++            headers={'Host': host,
++                     'Date': date,
++                     'Authorization': 'AWS %s:%s' % (ak, signature)},
++            timeout=timeout,
++            verify=cert_verify)
++    t2 = datetime.datetime.now()
++    time_diff = (t2 - t1).total_seconds()
++    if resp.status_code >= 300:
++        msg = get_xml_error(resp.text, args=(bucket_name, object_key))
++        if 'NoSuchKey' in msg:
++            msg += '\n\033[31mTips: The log file may have NOT been generated, or have been Deleted or Moved.\033[0m'
++        raise HttpException(resp.status_code, resp.reason, msg)
++
++    with open(file_name, 'wb') as f:
++        f.write(resp.content)
++
++    return (resp.status_code, resp.reason, len(resp.content), time_diff)
++
++
+ # iam
+ def get_project(ak, sk, region, host):
+     headers = sign_request_v4(ak, sk, 'GET', host, '/v3/projects',
+@@ -250,8 +279,8 @@ def put_subnet(ak, sk, project_id, regio
+ 
+ 
+ # fis
+-def fpga_image_register(ak, sk, project_id, region, host, fpga_image):
+-    uri = '/v1/%s/cloudservers/fpga_image' % project_id
++def fpga_image_create(ak, sk, project_id, region, host, fpga_image):
++    uri = '/v2/%s/cloudservers/fpga_image' % project_id
+     body = json.dumps({'fpga_image': fpga_image})
+     headers = sign_request_v4(ak, sk, 'POST', host, uri, region, 'ecs', body=body)
+     headers['Content-Type'] = 'application/json;charset=utf8'
+diff -uprN fisclient-2.1.0/fisclient/subcmd.py fisclient-2.2.0/fisclient/subcmd.py
+--- fisclient-2.1.0/fisclient/subcmd.py	2018-08-22 12:21:15.000000000 +0800
++++ fisclient-2.2.0/fisclient/subcmd.py	2018-09-03 21:20:55.000000000 +0800
+@@ -16,7 +16,6 @@
+ from __future__ import print_function
+ 
+ from collections import OrderedDict
+-import json
+ import os
+ import re
+ import sys
+@@ -128,7 +127,7 @@ def do_configure(args):
+         else:
+             # configure region_id interactively when get it from ECS metadata failed
+             configure_region_id = True
+-            print('\n\033[31mNote: If an incorrect Region ID is used, the FPGA image registration and querying may succeed, but the FPGA loading will fail.\033[0m')
++            print('\n\033[31mNote: If an incorrect Region ID is used, the FPGA image creation and querying may succeed, but the FPGA loading will fail.\033[0m')
+             print('Choose the Region where you are located.')
+             regions = config.endpoints.keys()
+             print('Available Regions:')
+@@ -149,6 +148,7 @@ def do_configure(args):
+         obs_endpoint = config.get_endpoint(region_id, 'obs')
+         iam_endpoint = config.get_endpoint(region_id, 'iam')
+         vpc_endpoint = config.get_endpoint(region_id, 'vpc')
++        ecs_endpoint = config.get_endpoint(region_id, 'fis')
+         fis_endpoint = config.get_endpoint(region_id, 'fis')
+ 
+         # configure intranet dns of ecs
+@@ -203,7 +203,7 @@ def do_configure(args):
+         available_bucket = [bucket for bucket in all_bucket
+                             if utils.is_bucket_valid(bucket, access_key, secret_key, obs_endpoint, region_id, domain_id)]
+         if available_bucket:
+-            print('\nChoose or Create a Bucket for storing the FPGA images to be registered.')
++            print('\nChoose or Create a Bucket for storing the DCP and LOG files.')
+             print('Available Bucket(s):')
+             for i, bucket in enumerate(available_bucket, 1):
+                 print('  (%d) %s' % (i, bucket))
+@@ -218,7 +218,7 @@ def do_configure(args):
+                         _check_and_create_bucket(bucket_name, all_bucket, access_key, secret_key, region_id, obs_endpoint)):
+                     break
+         else:
+-            print('\nCreate a Bucket for storing the FPGA images to be registered.')
++            print('\nCreate a Bucket for storing the DCP and LOG files.')
+             while True:
+                 bucket_name = raw_input('Bucket Name [%s]: ' % bucket_name_old).strip() or bucket_name_old
+                 if _check_and_create_bucket(bucket_name, all_bucket, access_key, secret_key, region_id, obs_endpoint):
+@@ -226,7 +226,7 @@ def do_configure(args):
+ 
+         # configure intranet dns of vpc
+         print('\nChecking private DNS of VPC.')
+-        config.configure_intranet_dns_vpc(access_key, secret_key, project_id, region_id, vpc_endpoint)
++        config.configure_intranet_dns_vpc(access_key, secret_key, project_id, region_id, ecs_endpoint, vpc_endpoint)
+ 
+         # save new settings
+         if not configure_region_id:
+@@ -247,41 +247,47 @@ def do_configure(args):
+         exit()
+ 
+ 
+-@utils.arg('--fpga-image-file', metavar='<FilePath>', required=True,
+-           help='The path of FPGA image file in the file system')
++@utils.arg('--dcp-file', metavar='<FilePath>', required=True,
++           help='The DCP file path in the local file system')
++@utils.arg('--dcp-obs-path', metavar='<OBSFilePath>', required=True,
++           help='The DCP file path in the OBS bucket')
++@utils.arg('--log-obs-directory', metavar='<OBSDirPath>',
++           help='The LOG file directory in the OBS bucket')
+ @utils.arg('--name', metavar='<String>', required=True,
+            help='The name of FPGA image')
+-@utils.arg('--metadata', metavar='<Object>', required=True,
+-           help='The metadata of FPGA image')
+ @utils.arg('--description', metavar='<String>',
+            help='The description of FPGA image')
+-def do_fpga_image_register(args):
+-    """Register an FPGA image"""
+-    object_key = utils.check_fpga_image_file(args.fpga_image_file)
++def do_fpga_image_create(args):
++    """Create an FPGA image"""
+     access_key = os.getenv('OS_ACCESS_KEY')
+     secret_key = os.getenv('OS_SECRET_KEY')
+     obs_endpoint = os.getenv('OS_OBS_ENDPOINT')
+     bucket_name = os.getenv('OS_BUCKET_NAME')
+ 
++    utils.check_dcp_file(args.dcp_file)
++
+     kwargs = OrderedDict()
++    kwargs['dcp_obs_path'] = args.dcp_obs_path
++    if args.log_obs_directory is not None:
++        kwargs['log_obs_directory'] = args.log_obs_directory
+     kwargs['name'] = args.name
+-    kwargs['metadata'] = args.metadata
+     if args.description is not None:
+         kwargs['description'] = args.description
+     utils.check_param(**kwargs)
+-    kwargs['location'] = '%s:%s' % (bucket_name, object_key)
+-    kwargs['metadata'] = json.loads(args.metadata,
+-                                    object_pairs_hook=OrderedDict)
+-
+-    print('Uploading FPGA image to OBS')
+-    status_code, reason, filesize, time_diff = rest.put_object(access_key, secret_key, args.fpga_image_file,
+-                                                               bucket_name, object_key, obs_endpoint)
+-    if status_code != 200:
+-        raise FisException("Upload FPGA image file to OBS failed: %s %s" % (status_code, reason))
+-    print('Upload %s bytes using %s seconds' % (filesize, time_diff))
+ 
+-    print('Registering FPGA image to FIS')
+-    status_code, reason, body = rest.fpga_image_register(*_get_config(), fpga_image=kwargs)
++    print('Uploading DCP file to OBS')
++    _, _, filesize, time_diff = rest.put_dcp_file(access_key, secret_key, args.dcp_file,
++                                                  bucket_name, args.dcp_obs_path, obs_endpoint)
++    print('Upload %s bytes using %s second(s)' % (filesize, time_diff))
++
++    print('Creating FPGA image to FIS')
++    fpga_image = {
++        'dcp_location': '%s:%s' % (bucket_name, args.dcp_obs_path),
++        'log_directory': args.log_obs_directory,
++        'name': args.name,
++        'description': args.description
++    }
++    status_code, reason, body = rest.fpga_image_create(*_get_config(), fpga_image=fpga_image)
+     if status_code != 200 or not isinstance(body, dict):
+         raise FisException(_invalid_resp(status_code, reason, body))
+     fi = body.get('fpga_image', {})
+@@ -316,6 +322,8 @@ def do_fpga_image_delete(args):
+     _do_resp(status_code, reason)
+ 
+ 
++@utils.arg('--fpga-image-id', metavar='<UUID>',
++           help='The ID of FPGA image')
+ @utils.arg('--page', metavar='<Int>',
+            help='The page number for pagination query')
+ @utils.arg('--size', metavar='<Int>',
+@@ -323,6 +331,8 @@ def do_fpga_image_delete(args):
+ def do_fpga_image_list(args):
+     """Query FPGA images of a tenant"""
+     kwargs = OrderedDict()
++    if args.fpga_image_id is not None:
++        kwargs['fpga_image_id'] = args.fpga_image_id
+     if args.page is not None and args.size is not None:
+         kwargs['page'] = args.page
+         kwargs['size'] = args.size
+@@ -425,3 +435,49 @@ def do_fpga_image_relation_list(args):
+ 
+     if args.image_id is None and args.fpga_image_id is None:
+         print('Tips: The FPGA image relations can only be obtained if at least one of the \033[31m--fpga-image-id\033[0m and \033[31m--image-id\033[0m arguments is specified, otherwise only an empty list is returned.')
++
++
++@utils.arg('--fpga-image-id', metavar='<UUID>', required=True,
++           help='The ID of FPGA image')
++def do_get_log_file(args):
++    """Get the log file of an FPGA image"""
++    access_key = os.getenv('OS_ACCESS_KEY')
++    secret_key = os.getenv('OS_SECRET_KEY')
++    obs_endpoint = os.getenv('OS_OBS_ENDPOINT')
++
++    kwargs = OrderedDict()
++    kwargs['fpga_image_id'] = args.fpga_image_id
++    utils.check_param(**kwargs)
++
++    status_code, reason, body = rest.fpga_image_list(*_get_config(), params=kwargs)
++    if status_code != 200 or not isinstance(body, dict):
++        raise FisException(_invalid_resp(status_code, reason, body))
++    fi_list = body.get('fpgaimages', [])
++
++    if not fi_list:
++        raise FisException('FPGA Image [%s] does not exist' % args.fpga_image_id)
++    fpga_image = fi_list[0]
++    if fpga_image.get('status') not in ('active', 'error'):
++        raise FisException('FPGA Image [%s] status [%s] is not "active" or "error"' % (args.fpga_image_id, fpga_image.get('status')))
++    log_directory = fpga_image.get('log_directory')
++    if log_directory is None:
++        raise FisException('FPGA Image [%s] has no log file' % args.fpga_image_id)
++
++    print('Log directory is "%s"' % log_directory)
++    l = log_directory.split(':')
++    if len(l) != 2 or l[0] == '':
++        raise FisException('Log directory [%s] is invalid' % log_directory)
++    file_name = args.fpga_image_id + '_log.tar'
++    if os.path.lexists(file_name):
++        raise FisException('The file [%s] already exists in the current directory' % file_name)
++    bucket_name = l[0]
++    if l[1]:
++        object_key = '%s/%s' % (l[1], file_name)
++    else:
++        object_key = file_name
++
++    print('Downloading Log file from OBS')
++    status_code, reason, filesize, time_diff = rest.get_log_file(access_key, secret_key, file_name,
++                                                                 bucket_name, object_key, obs_endpoint)
++    _do_resp(status_code, reason)
++    print('Download %s bytes using %s second(s)' % (filesize, time_diff))
+diff -uprN fisclient-2.1.0/fisclient/utils.py fisclient-2.2.0/fisclient/utils.py
+--- fisclient-2.1.0/fisclient/utils.py	2018-08-22 12:21:15.000000000 +0800
++++ fisclient-2.2.0/fisclient/utils.py	2018-09-03 21:20:55.000000000 +0800
+@@ -15,8 +15,6 @@
+ 
+ from __future__ import print_function
+ 
+-import collections
+-import getpass
+ import hashlib
+ import json
+ import os
+@@ -76,6 +74,25 @@ def compute_md5(*args):
+     return m.hexdigest()
+ 
+ 
++def retry_decorator(f):
++    def g(*args, **kwargs):
++        failed = True
++        retry_cnt = 0
++        while failed:
++            failed = False
++            try:
++                return f(*args, **kwargs)
++            except Exception as e:
++                failed = True
++                retry_cnt = retry_cnt + 1
++                if retry_cnt <= 3:
++                    print('%s failed, retry #%d:\n%s' % (f.__name__, retry_cnt, e))
++                else:
++                    print('%s failed, give up retry' % (f.__name__))
++                    raise e
++    return g
++
++
+ def _check_bucket_acl_location(bucket_name, ak, sk, host, region_id, domain_id):
+     location = rest.get_bucket_location(ak, sk, bucket_name, host)
+     location = location.get('LocationConstraint')
+@@ -118,37 +135,46 @@ def check_bucket_name(bucket_name):
+     return True
+ 
+ 
+-def check_fpga_image_file(file_name):
+-    expand_file_name = os.path.expanduser(file_name)
+-    object_key = os.path.basename(expand_file_name)
++def check_dcp_file(dcp_file):
++    expand_file_name = os.path.expanduser(dcp_file)
++    if not expand_file_name.endswith('.tar'):
++        msg = '"%s" should endswith .tar suffix' % dcp_file
++        raise exception.FisException(msg)
+     if not os.path.isfile(expand_file_name):
+-        msg = '"%s" is not an existing regular file' % file_name
++        msg = '"%s" is not an existing regular file' % dcp_file
+         raise exception.FisException(msg)
+-    if object_key.endswith((u'.bin', u'.xclbin')) and re.match(u'[a-zA-Z0-9_./\-]{4,64}$', object_key):
+-        return object_key
+-    else:
+-        raise exception.ParameterException('fpga_image_file_name', object_key)
+ 
+ 
+-def _check_metadata(metadata):
+-    try:
+-        obj = json.loads(metadata, object_pairs_hook=collections.OrderedDict)
+-    except ValueError:
++def _check_dcp_obs_path(dcp_path):
++    if not re.match(u'[a-zA-Z0-9_./\-]{4,128}$', dcp_path):
+         return False
+-    if not isinstance(obj, dict):
++    if dcp_path.startswith('/') or not dcp_path.endswith('.tar'):
++        return False
++    for d in dcp_path.split('/')[:-1]:
++        if d == '' or d.startswith('.') or d.endswith('.'):
++            return False
++    return True
++
++
++def _check_log_obs_directory(log_directory):
++    if not re.match(u'[a-zA-Z0-9_./\-]{0,64}$', log_directory):
+         return False
+-    if len(json.dumps(obj)) > 1024:
++    if log_directory.startswith('/') or log_directory.endswith('/'):
+         return False
++    if log_directory != '':
++        for d in log_directory.split('/'):
++            if d == '' or d.startswith('.') or d.endswith('.'):
++                return False
+     return True
+ 
+ 
+ _check_dict = {
++    'dcp_obs_path': _check_dcp_obs_path,
++    'log_obs_directory': _check_log_obs_directory,
+     'name': lambda value: re.match(u'[a-zA-Z0-9-_]{1,64}$', value),
+-    'metadata': lambda value: _check_metadata(value),
+     'description': lambda value: re.match(
+         u'[\u4e00-\u9fa5\u3002\uff0ca-zA-Z0-9-_., ]{0,255}$',
+         value),
+-    'file_name': lambda value: value.endswith((u'.bin', u'.xclbin')) and re.match(u'[a-zA-Z0-9_./\-]{4,64}$', value),
+     'fpga_image_id': lambda value: re.match(u'[0-9a-f]{32}$', value),
+     'image_id': lambda value: re.match(
+         u'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
+diff -uprN fisclient-2.1.0/README_CN.md fisclient-2.2.0/README_CN.md
+--- fisclient-2.1.0/README_CN.md	2018-08-22 12:21:15.000000000 +0800
++++ fisclient-2.2.0/README_CN.md	2018-09-03 21:20:55.000000000 +0800
+@@ -7,9 +7,11 @@
+ - [3 配置](#3-配置)
+ - [4 介绍](#4-介绍)
+   - [4.1 fis命令](#41-fis命令)
+-  - [4.2 查询](#42-查询)
+-  - [4.3 删除](#43-删除)
+-  - [4.4 关联、解关联和查询关联](#44-关联解关联和查询关联)
++  - [4.2 创建](#42-创建)
++  - [4.3 查询](#43-查询)
++  - [4.4 获取日志文件](#44-获取日志文件)
++  - [4.5 删除](#45-删除)
++  - [4.6 关联、解关联和查询关联](#46-关联解关联和查询关联)
+ - [5 fis命令详解](#5-fis命令详解)
+   - [5.1 查看帮助信息](#51-查看帮助信息)
+   - [5.2 删除子命令](#52-删除子命令)
+@@ -17,6 +19,7 @@
+   - [5.4 关联子命令](#54-关联子命令)
+   - [5.5 解关联子命令](#55-解关联子命令)
+   - [5.6 查询关联子命令](#56-查询关联子命令)
++  - [5.7 获取日志子命令](#57-获取日志子命令)
+ 
+ <a name="operating-environment-requirements"></a>
+ # 1 运行环境要求 #
+@@ -51,7 +54,7 @@ 在配置过程中，用户需要输入�
+ | ---- | ---- |
+ | **Access Key** | 接入键标识AK |
+ | **Secret Key** | 安全接入键SK |
+-| **Bucket Name** | 用于存放待注册FPGA镜像的OBS桶 |
++| **Bucket Name** | 用于存放DCP和LOG文件的OBS桶 |
+ 
+ > **fisclient** 会自动保存用户上一次的有效配置参数。用户在配置过程中，既可以输入新的配置参数，也可以通过输入单个**回车键**来使用上一次的配置参数。<br/>
+ > 在完成配置后，用户可以执行 **fis configure --dump** 命令查看当前的配置。
+@@ -69,14 +72,14 @@ 当提示输入 **Access Key** 时，请
+ 当提示输入 **Secret Key** 时，请输入用户的**安全接入键（Secret Access Key）**。
+ 
+ ### 步骤2 配置桶参数 ###
+-桶参数 **Bucket Name** 表示存放待注册FPGA镜像的OBS桶。
++桶参数 **Bucket Name** 表示存放DCP和LOG文件的OBS桶。
+ 
+ > 如果用户在当前区域中已经拥有了符合条件的OBS桶，**fisclient** 会罗列出这些桶，用户只需要从中选择一个即可。
+ 
+ #### 场景1 创建新的OBS桶 ####
+ 
+ <pre>
+-Choose or Create a Bucket for storing the FPGA images to be registered.
++Choose or Create a Bucket for storing the DCP and LOG files.
+ Available Bucket(s):
+   (1) hello-fpga1
+ Bucket Name []: hello-fpga2
+@@ -97,13 +100,13 @@ 如果用户在当前区域中没有符�
+ #### 场景2 使用已有的OBS桶 ####
+ 
+ <pre>
+-Choose or Create a Bucket for storing the FPGA images to be registered.
++Choose or Create a Bucket for storing the DCP and LOG files.
+ Available Bucket(s):
+   (1) hello-fpga1
+   (2) hello-fpga2
+ Bucket Name []: 2
+ </pre>
+-如果用户希望使用已有的OBS桶，则当提示输入 **Bucket Name** 时，请输入相应OBS桶的序号。例如，用户在当前区域中拥有 **hello-fpga1** 和 **hello-fpga2** 两个符合条件的OBS桶，并希望使用 **hello-fpga2** 来存放待注册的FPGA镜像，则请输入 **hello-fpga2** 对应的序号，即 **2** 。
++如果用户希望使用已有的OBS桶，则当提示输入 **Bucket Name** 时，请输入相应OBS桶的序号。例如，用户在当前区域中拥有 **hello-fpga1** 和 **hello-fpga2** 两个符合条件的OBS桶，并希望使用 **hello-fpga2** 来存放DCP和LOG文件，则请输入 **hello-fpga2** 对应的序号，即 **2** 。
+ 
+ > 当用户期望选择或创建的桶名与Available Bucket(s)列表中OBS桶的序号冲突时，用户可以在桶名前添加一个!符号，使用 **!mybucket** 表示期望选择或创建的桶名为 **mybucket**。
+ 
+@@ -133,13 +136,42 @@ fis命令的格式为 **fis &lt;subcomma
+ 
+ fis命令的详细使用说明请参见[fis命令详解](#fis-command-description)。
+ 
++<a name="create"></a>
++## 4.2 创建 ##
++
++- 步骤1. 执行工程中的 **AEI_Register.sh** 脚本创建FPGA镜像，并得到一个FPGA镜像ID。
++
++> 注意，创建FPGA镜像是一个异步过程。**步骤1**成功执行并不表示FPGA镜像创建成功。用户还需要执行**步骤2**，直到FPGA镜像的状态为 **active** 时，才表示FPGA镜像创建成功。
++
++- 步骤2. [查询](#query)创建的进度直到创建完成。在创建过程中，FPGA镜像的状态会不断变化。当状态为 **active** 或 **error** 时，表示创建完成。
++
++> [root@ ~]# fis fpga-image-list --fpga-image-id &lt;FPGA镜像ID&gt;
++
++- 步骤3. 在FPGA镜像创建完成后，[获取构建日志文件](#get-log)。
++
++> [root@ ~]# fis get-log-file --fpga-image-id &lt;FPGA镜像ID&gt;
++
+ <a name="query"></a>
+-## 4.2 查询 ##
+-在注册FPGA镜像后，用户可以使用fis查询子命令查询自身拥有的FPGA镜像的信息。在确认FPGA镜像的状态是 **active** 后，用户可以使用相应的FPGA镜像ID执行后续的加载、删除、关联等操作。<br/>
++## 4.3 查询 ##
++在创建FPGA镜像后，用户可以使用fis查询子命令查询自身拥有的FPGA镜像的信息。
+ 
+ > 注意，用户通过fis查询子命令只能查询到**自身拥有的FPGA镜像**的信息。对于购买的和共享的FPGA镜像，用户需要通过**fis查询关联子命令**来查询相应的信息。例如，用户可以参考[查询共享的FPGA镜像](#querying-the-shared-fpga-image)来了解如何查询FPGA共享镜像的信息。
+ 
+-fis查询子命令以一个表格来呈现FPGA镜像信息，并且支持分页查询功能。更多详细信息请参见[查询子命令](#query-subcommand)。
++fis查询子命令以一个表格来呈现FPGA镜像信息，并且支持分页查询功能。更多详细信息请参见[查询子命令](#query-subcommand)。<br/>
++
++### FPGA镜像状态 ###
++FPGA镜像具有如下6种状态：
++
++| 状态 | 说明 |
++| ------- | ----------- |
++| **initialling** | 创建初始化 |
++| **scheduling** | 等待调度创建 |
++| **creating** | 正在创建中 |
++| **active** | 可用 |
++| **deleting** | 删除中 |
++| **error** | 操作异常 |
++
++在确认FPGA镜像的状态是 **active** 后，用户可以使用相应的FPGA镜像ID执行后续的加载、删除、关联等操作。
+ 
+ ### 示例 ###
+ 执行以下fis命令查询FPGA镜像：
+@@ -152,14 +184,30 @@ Success: 200 OK
+ | 000000******08b4015e3224afe203c3 | OCL_001 | active | False     | 43   | 2017-09-19 02:27:31 | mmult_01    | {"manifest_format_version": "1", "pci_vendor_id": "0x19e5", "pci_device_id": "0xD512", "pci_subsystem_id": "-", "pci_subsystem_vendor_id": "-", "shell_type": "0x121", "shell_version": "0x0001", "hdk_version": "SDx 2017.1", "date": "2017/09/17_18:37:12"} |         |
+ +----------------------------------+---------+--------+-----------+------+---------------------+-------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+---------+
+ </pre>
+-- 用户之前注册的FPGA镜像的ID为 **000000\*\*\*\*\*\*08b4015e3224afe203c3**。
+-- FPGA镜像的状态为 **active**，表示用户之前的注册操作执行成功。
++- 用户之前创建的FPGA镜像的ID为 **000000\*\*\*\*\*\*08b4015e3224afe203c3**。
++- FPGA镜像的状态为 **active**，表示用户之前的创建操作执行成功。
+ 
+ 因此，用户可以使用该FPGA镜像ID进行后续的加载、删除、关联等操作。
+ 
++<a name="get-log"></a>
++## 4.4 获取日志文件 ##
++在FPGA镜像创建完成后，用户可以执行fis获取日志子命令将相应的构建日志文件下载到本地。构建日志文件会保存到当前目录下，并按照 **{FPGA镜像ID}_log.tar** 的格式命名。更多详细信息请参见[fis获取日志子命令](#get-log-subcommand)。
++
++### 示例 ###
++获取ID为 **0086137b\*\*\*\*\*\*\*\*016535d03b210005** 的FPGA镜像的日志文件。
++<pre>
++[root@ ~]# fis get-log-file --fpga-image-id 0086137b********016535d03b210005
++Log directory is "obs-test-fpga:vu9p"
++Downloading Log file from OBS
++Success: 200 OK
++Download 2517 bytes using 0.078489 second(s)
++[root@ ~]# ls
++0086137b********016535d03b210005_log.tar
++</pre>
++
+ <a name="deletion"></a>
+-## 4.3 删除 ##
+-删除操作允许FPGA镜像的拥有者执行FPGA镜像的删除操作。当用户不再使用某个注册成功的FPGA镜像，并且希望从FPGA镜像管理模块中删除该FPGA镜像相关的记录时，可以使用fis删除子命令进行FPGA镜像删除操作。此外，如果用户在执行fis查询子命令时发现某个FPGA镜像的状态是 **error** 时，可以使用fis删除子命令删除该FPGA镜像记录。<br/>
++## 4.5 删除 ##
++删除操作允许FPGA镜像的拥有者执行FPGA镜像的删除操作。当用户不再使用某个创建成功的FPGA镜像，并且希望从FPGA镜像管理模块中删除该FPGA镜像相关的记录时，可以使用fis删除子命令进行FPGA镜像删除操作。此外，如果用户在执行fis查询子命令时发现某个FPGA镜像的状态是 **error** 时，可以使用fis删除子命令删除该FPGA镜像记录。<br/>
+ 如果FPGA镜像已经和某个弹性云服务器镜像关联，FPGA镜像将被置于“保护”状态（FPGA镜像的 **protected** 属性被置为 **True**），不允许被删除。更多详细信息请参见[删除子命令](#deletion-subcommand)。
+ 
+ ### 删除确认 ###
+@@ -185,10 +233,10 @@ 用户在某次执行查询操作时返�
+ | id                               | name     | status | protected | size | createdAt           | description | metadata                                                                                                                                                                                                                                                                                                                                                                                  | message                    |
+ +----------------------------------+----------+--------+-----------+------+---------------------+-------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+----------------------------+
+ | ff********5056b2015d5e13608c73c7 | OCL_001  | active | False     | 43   | 2017-09-19 02:27:31 | mmult_01    | {"manifest_format_version": "1", "pci_vendor_id": "0x19e5", "pci_device_id": "0xD512", "pci_subsystem_id": "-", "pci_subsystem_vendor_id": "-", "shell_type": "0x121", "shell_version": "0x0001", "hdk_version": "SDx 2017.1", "date": "2017/09/18_18:27:12"}                                                                                                                             |                            |
+-| 4010b39c5d4********48e97411005ae | dpdk_002 | error  | False     | 45   | 2017-09-19 16:39:27 | example_02  | {"manifest_format_version": "1", "pci_vendor_id": "0x19e5", "pci_device_id": "0xD503", "pci_subsystem_id": "-", "pci_subsystem_vendor_id": "-", "dcp_hash": "ced75657********60f212a9454f6c5ae33d50f0a248e99dbef638231b26960c", "shell_type": "0x101", "shell_version": "0x0013", "dcp_file_name": "ul_pr_top_routed.dcp", "hdk_version": "Vivado 2017.2", "date": "2017/09/19_13:51:41"} | register fpga image failed |
++| 4010b39c5d4********48e97411005ae | dpdk_002 | error  | False     | 45   | 2017-09-19 16:39:27 | example_02  | {"manifest_format_version": "1", "pci_vendor_id": "0x19e5", "pci_device_id": "0xD503", "pci_subsystem_id": "-", "pci_subsystem_vendor_id": "-", "dcp_hash": "ced75657********60f212a9454f6c5ae33d50f0a248e99dbef638231b26960c", "shell_type": "0x101", "shell_version": "0x0013", "dcp_file_name": "ul_pr_top_routed.dcp", "hdk_version": "Vivado 2017.2", "date": "2017/09/19_13:51:41"} | create fpga image failed |
+ +----------------------------------+----------+--------+-----------+------+---------------------+-------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+----------------------------+
+ </pre>
+-如果用户希望删除不再使用的ID为 **ff\*\*\*\*\*\*\*\*5056b2015d5e13608c73c7** 的FPGA镜像，以及注册失败的ID为 **4010b39c5d4\*\*\*\*\*\*\*\*48e97411005ae** 的FPGA镜像，可以执行如下的fis命令：
++如果用户希望删除不再使用的ID为 **ff\*\*\*\*\*\*\*\*5056b2015d5e13608c73c7** 的FPGA镜像，以及创建失败的ID为 **4010b39c5d4\*\*\*\*\*\*\*\*48e97411005ae** 的FPGA镜像，可以执行如下的fis命令：
+ 
+ - 删除不再使用的FPGA镜像。
+ <pre>
+@@ -205,18 +253,18 @@ Success: 204 No Content
+ 在上述命令中，**--fpga-image-id** 选项指定待删除的FPGA镜像的ID，**--force** 选项指定执行强制删除操作。如果命令的回显信息为 **Success: 204 No Content**，则表示fis删除子命令执行成功。然而，删除子命令执行成功并不代表FPGA镜像删除成功。用户需要执行查询操作，如果查找不到待删除的FPGA镜像的信息，则表示FPGA镜像删除成功。
+ 
+ <a name="association-disassociation-association-query"></a>
+-## 4.4 关联、解关联和查询关联 ##
+-通过关联操作，用户可以将已成功注册的FPGA镜像提供给 **位于相同区域** 的其他用户使用，包括如下两种场景：
++## 4.6 关联、解关联和查询关联 ##
++通过关联操作，用户可以将已成功创建的FPGA镜像提供给 **位于相同区域** 的其他用户使用，包括如下两种场景：
+ 
+-- 市场镜像场景：将已成功注册的FPGA镜像发布到云市场进行交易。
+-- 共享镜像场景：将已成功注册的FPGA镜像共享给指定用户。
++- 市场镜像场景：将FPGA镜像发布到云市场进行交易。
++- 共享镜像场景：将FPGA镜像共享给指定用户。
+ 
+ 通过查询关联操作，用户可以查询其他用户提供的FPGA镜像。通过解关联操作，用户可以取消FPGA镜像的共享。<br/>
+ 本小节以共享镜像场景为例来说明关联、解关联和查询关联操作的使用。这些子命令的更多详细信息请参见[关联子命令](#association-subcommand)、[解关联子命令](#disassociation-subcommand)和[查询关联子命令](#association-query-subcommand)。
+ 
+ <a name="sharing-the-fpga-image"></a>
+ ### 共享FPGA镜像 ###
+-当用户A想要将自己拥有的一个已注册成功的FPGA镜像共享给用户B时，需要完成以下步骤。以下假设用户A想将ID为 **4010b39c5d4\*\*\*\*\*\*\*\*\*\*f2cf8070c7e** 的 **通用型架构** 的FPGA镜像共享给用户B。 
++当用户A想要将自己拥有的一个FPGA镜像共享给用户B时，需要完成以下步骤。以下假设用户A想将ID为 **4010b39c5d4\*\*\*\*\*\*\*\*\*\*f2cf8070c7e** 的 **通用型架构** 的FPGA镜像共享给用户B。 
+ 
+ - 步骤1：从 **通用型架构** 的FPGA弹性云服务器创建一个ECS私有镜像，更多详细信息请参见[创建私有镜像](https://support.huaweicloud.com/usermanual-ims/zh-cn_topic_0030713180.html)。
+ 
+@@ -288,16 +336,16 @@ Command-line interface to the fis API.
+ positional arguments: 
+   &lt;subcommand&gt; 
+     configure           Invoke interactive (re)configuration tool
++    fpga-image-create   Create an FPGA image
+     fpga-image-delete   Delete an FPGA image
+     fpga-image-list     Query FPGA images of a tenant
+-    fpga-image-register
+-                        Register an FPGA image
+     fpga-image-relation-create
+                         Create the relation of an FPGA image and an ECS image
+     fpga-image-relation-delete
+                         Delete the relation of an FPGA image and an ECS image
+     fpga-image-relation-list
+                         Query FPGA image relations visible to a tenant
++    get-log-file        Get the log file of an FPGA image
+     help                Display help about fis or one of its subcommands
+ 
+ See "fis help COMMAND" for help on a specific command.
+@@ -308,21 +356,20 @@ fis命令的格式为 **fis &lt;subcomma
+ - 子命令 **&lt;subcommand&gt;** 指定执行的fis命令的功能。
+ - 选项 **&lt;option&gt;** 特定于子命令，为子命令指定命令参数。
+ 
+-fis命令包含如下8个子命令。
++fis命令包含如下子命令。
+ 
+ | 命令 | 说明 |
+ | ------- | ----------- |
+ | **configure** | 配置子命令，用于调用 **fisclient** 的交互式配置工具 |
++| **fpga-image-create** | 创建子命令，用于创建FPGA镜像 |
+ | **fpga-image-delete** | 删除子命令，用于删除FPGA镜像 |
+ | **fpga-image-list** | 查询子命令，用于查询租户拥有的FPGA镜像详情列表信息 |
+-| **fpga-image-register** | 注册子命令，用于注册FPGA镜像 |
+ | **fpga-image-relation-create** | 关联子命令，用于创建FPGA镜像与弹性云服务器镜像的关联关系 |
+ | **fpga-image-relation-delete** | 解关联子命令，用于删除FPGA镜像与弹性云服务器镜像的关联关系 |
+ | **fpga-image-relation-list** | 查询关联子命令，用于查询租户可见的FPGA镜像与弹性云服务器镜像的关联关系 |
++| **get-log-file** | 获取日志子命令，用于获取FPGA镜像的日志文件 |
+ | **help** | 帮助子命令，用于显示fis命令或fis子命令的帮助信息 |
+ 
+-> fis注册子命令 **fpga-image-register** 在用户执行 **AEI_Register.sh** 脚本时将自动调用。用户不需要单独执行该命令实现注册FPGA镜像。
+-
+ <a name="deletion-subcommand"></a>
+ ## 5.2 删除子命令 ##
+ 删除子命令为用户提供删除FPGA镜像管理模块中的相应FPGA镜像的功能。在成功执行删除操作后，针对被删除的FPGA镜像的加载、关联、删除等操作都将失败。
+@@ -377,15 +424,17 @@ Success: 204 No Content
+ 查询子命令以表格的形式呈现租户拥有的FPGA镜像的信息。同时，查询子命令提供分页查询功能。
+ 
+ ### 命令格式 ###
+-**fis fpga-image-list** **[--page** *&lt;Int&gt;***] [--size** *&lt;Int&gt;***]**
++**fis fpga-image-list [--fpga-image-id** *&lt;UUID&gt;***]** **[--page** *&lt;Int&gt;***] [--size** *&lt;Int&gt;***]**
+ 
+ ### 参数说明 ###
+ | 参数 | 说明 | 取值 | 备注 |
+ | --------- | ----------- | ----- | ------- |
+-| **--page** | （可选）分页查询时的页编号。 | **page**参数是[1,65535)范围内的十进制整数，并且不能包含+号。 | 由用户自行指定。 |
+-| **--size** | （可选）分页查询时的页大小。 | **size**参数是[1,100]范围内的十进制整数，并且不能包含+号。 | 由用户自行指定。 |
++| **--fpga-image-id** | （可选）待查询的FPGA镜像的ID。 | **fpga-image-id**参数是由英文小写字母a-f，数字0-9组成的32位字符串。 | - |
++| **--page** | （可选）分页查询时的页编号。 | **page**参数是[1,65535)范围内的十进制整数，并且不能包含+号。 | - |
++| **--size** | （可选）分页查询时的页大小。 | **size**参数是[1,100]范围内的十进制整数，并且不能包含+号。 | - |
+ 
+-> **page** 参数和 **size** 参数必须同时存在或同时不存在，并且只有当两个参数同时存在时分页查询功能才能生效。
++> **page** 参数和 **size** 参数必须同时存在或同时不存在，并且只有当两个参数同时存在时分页查询功能才能生效。<br/>
++> 当指定 **fpga_image_id** 参数时，分页查询参数 **page** 和 **size** 将不起作用。
+ 
+ ### 使用说明 ###
+ 当回显信息中包含 **Success: 200 OK** 时，表示查询子命令执行成功，此时回显信息是一个包含下述列标题的表格。
+@@ -400,7 +449,7 @@ The following table describes the table
+ | --------- | ----------- |
+ | **id** | FPGA镜像的ID |
+ | **name** | FPGA镜像的名称 |
+-| **status** | FPGA镜像的状态 |
++| **status** | FPGA镜像的状态<br/>取值范围：<br/>initialling, scheduling, creating, active, deleting, error |
+ | **protected** | FPGA镜像是否处于“保护”状态 |
+ | **size** | FPGA镜像的文件大小，单位为MB |
+ | **createdAt** | FPGA镜像的创建时间（UTC） |
+@@ -548,8 +597,8 @@ 查询关联子命令以表格的形式�
+ | --------- | ----------- | ----- | ------- |
+ | **--fpga-image-id** | （可选）待查询关联的FPGA镜像的ID。 | **fpga-image-id**参数是由英文小写字母a-f，数字0-9组成的32位字符串。 | 在查询子命令执行成功后，用户可以在回显信息中查找到相应的FPGA镜像ID。 |
+ | **--image-id** | （可选）待查询关联的弹性云服务器镜像的ID。 | **image-id**参数遵循IMS（镜像服务）的镜像ID限制。 | 用户可以在镜像的详情页面中获取镜像ID。 |
+-| **--page** | （可选）分页查询时的页编号。 | **page**参数是[1,65535)范围内的十进制整数，并且不能包含+号。 | 由用户自行指定。 |
+-| **--size** | （可选）分页查询时的页大小。 | **size**参数是[1,100]范围内的十进制整数，并且不能包含+号。 | 由用户自行指定。 |
++| **--page** | （可选）分页查询时的页编号。 | **page**参数是[1,65535)范围内的十进制整数，并且不能包含+号。 | - |
++| **--size** | （可选）分页查询时的页大小。 | **size**参数是[1,100]范围内的十进制整数，并且不能包含+号。 | - |
+ 
+ > 只有至少指定 **fpga-image-id** 和 **image-id** 参数中的一个时，用户才可能查询到关联关系，否则只会返回一个空列表。<br/>
+ > **page** 和 **size** 参数必须同时存在或同时不存在，并且只有当两个参数同时存在时分页查询功能才能生效。<br/>
+@@ -570,7 +619,7 @@ 列标题的含义如下表所示。
+ | **image_id** | 弹性云服务器镜像的ID |
+ | **fpga_image_id** | FPGA镜像的ID |
+ | **name** | FPGA镜像的名称 |
+-| **status** | FPGA镜像的状态 |
++| **status** | FPGA镜像的状态<br/>取值范围：<br/>initialling, scheduling, creating, active, deleting, error |
+ | **protected** | FPGA镜像是否处于“保护”状态 |
+ | **size** | FPGA镜像的文件大小，单位为MB |
+ | **createdAt** | FPGA镜像的创建时间（UTC） |
+@@ -608,3 +657,44 @@ Success: 200 OK
+ | 404223ca-8**b-4**2-a**e-d187****61bc | 00000000********015e97f6408d01cd | OCL_001  | active | True      | 43   | 2017-09-18 02:37:31 | mmult_01    | {"manifest_format_version": "1", "pci_vendor_id": "0x19e5", "pci_device_id": "0xD512", "pci_subsystem_id": "-", "pci_subsystem_vendor_id": "-", "shell_type": "0x121", "shell_version": "0x0001", "hdk_version": "SDx 2017.1", "date": "2017/09/17_18:37:12"}                                                                                                                             |         |
+ +--------------------------------------+----------------------------------+----------+--------+-----------+------+---------------------+-------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+---------+
+ </pre>
++
++<a name="get-log-subcommand"></a>
++## 5.7 获取日志子命令 ##
++用户可以使用获取日志子命令下载FPGA镜像的日志文件。
++
++### 命令格式 ###
++**fis get-log-file --fpga-image-id** *&lt;UUID&gt;*
++
++### 参数说明 ###
++| 参数 | 说明 | 取值 | 备注 |
++| --------- | ----------- | ----- | ------- |
++| **--fpga-image-id** | （必选）待下载日志文件的FPGA镜像的ID。 | **fpga-image-id**参数是由英文小写字母a-f，数字0-9组成的32位字符串。 | 在查询子命令执行成功后，用户可以在回显信息中查找到相应的FPGA镜像ID。 |
++
++### 使用说明 ###
++当回显信息中包含 **Success: 200 OK** 时，表示获取日志子命令执行成功。此时，日志文件会保存到当前目录下，并按照 **{FPGA镜像ID}_log.tar** 的格式命名，例如 **0086137b\*\*\*\*\*\*\*\*016535d03b210005_log.tar**。
++
++<br/>
++当获取日志子命令执行失败时，回显信息中会包含相应的错误原因信息。
++
++- Example
++<pre>
++[root@ ~]# fis get-log-file --fpga-image-id 0086137b\*\*\*\*\*\*\*\*0165332ab1280031
++Log directory is "obs-test-fpga:vu9p/log"
++Downloading Log file from OBS
++Error: 404 Not Found
++The specified key does not exist., Code=NoSuchKey, RequestId=00010F4B\*\*\*\*\*\*\*\*6535EA40A1CEAELK, Function=get_log_file, Arguments=(u'obs-test-fpga', u'vu9p/log/0086137b\*\*\*\*\*\*\*\*0165332ab1280031_log.tar')
++Tips: The log file may have NOT been generated, or have been Deleted or Moved.
++</pre>
++错误信息表示待下载的日志文件可能还未生成，或已被删除或移动。
++
++### 示例 ###
++获取ID为 **0086137b\*\*\*\*\*\*\*\*016535d03b210005** 的FPGA镜像的日志文件。
++<pre>
++[root@ ~]# fis get-log-file --fpga-image-id 0086137b********016535d03b210005
++Log directory is "obs-test-fpga:vu9p"
++Downloading Log file from OBS
++Success: 200 OK
++Download 2517 bytes using 0.078489 second(s)
++[root@ ~]# ls
++0086137b********016535d03b210005_log.tar
++</pre>
+\ No newline at end of file
+diff -uprN fisclient-2.1.0/README.md fisclient-2.2.0/README.md
+--- fisclient-2.1.0/README.md	2018-08-22 12:21:15.000000000 +0800
++++ fisclient-2.2.0/README.md	2018-09-03 21:20:55.000000000 +0800
+@@ -7,9 +7,11 @@
+ - [3 Configuring fisclient](#3-configuring-fisclient)
+ - [4 Introduction](#4-introduction)
+   - [4.1 fis Command](#41-fis-command)
+-  - [4.2 Querying FPGA Images](#42-querying-fpga-images)
+-  - [4.3 Deleting an FPGA Image](#43-deleting-an-fpga-image)
+-  - [4.4 Associating and Disassociating FPGA Images, and Querying Associations](#44-associating-and-disassociating-fpga-images-and-querying-associations)
++  - [4.2 Creating an FPGA Image](#42-creating-an-fpga-image)
++  - [4.3 Querying FPGA Images](#43-querying-fpga-images)
++  - [4.4 Getting an Log File](#44-getting-an-log-file)
++  - [4.5 Deleting an FPGA Image](#45-deleting-an-fpga-image)
++  - [4.6 Associating and Disassociating FPGA Images, and Querying Associations](#46-associating-and-disassociating-fpga-images-and-querying-associations)
+ - [5 fis Command Description](#5-fis-command-description)
+   - [5.1 Viewing Help Information](#51-viewing-help-information)
+   - [5.2 Deletion Subcommand](#52-deletion-subcommand)
+@@ -17,6 +19,7 @@
+   - [5.4 Association Subcommand](#54-association-subcommand)
+   - [5.5 Disassociation Subcommand](#55-disassociation-subcommand)
+   - [5.6 Association Query Subcommand](#56-association-query-subcommand)
++  - [5.7 Get Log Subcommand](#57-get-log-subcommand)
+ 
+ 
+ <a name="requirements-on-the-operating-environment"></a>
+@@ -52,7 +55,7 @@ Set the parameters listed in the followi
+ | --------- | ----------- |
+ | **Access Key** | AK (Access Key ID) |
+ | **Secret Key** | SK (Secret Access Key) |
+-| **Bucket Name** | OBS Bucket for storing the FPGA images to be registered |
++| **Bucket Name** | OBS Bucket for storing the DCP and LOG files |
+ 
+ > **fisclient** automatically saves the last valid parameter configuration. You can enter new parameter configurations or press **Enter** to use the previous configuration.<br/>
+ > After the configuration is complete, you can run the `fis configure --dump` command to view the current configuration.
+@@ -69,14 +72,14 @@ Secret Key []: a0vet3Eh*****************
+ Enter the **Access Key ID** and **Secret Access Key** when prompted.
+ 
+ ### Step 2. Configure Bucket Name ###
+-**Bucket Name** indicates the OBS bucket that stores the FPGA images to be registered.
++**Bucket Name** indicates the OBS bucket that stores the DCP and LOG files.
+ 
+ > If you have available buckets in the current region, fisclient will list them all. Select one of them.
+ 
+ #### Example 1. Create a new OBS bucket ####
+ 
+ <pre>
+-Choose or Create a Bucket for storing the FPGA images to be registered.
++Choose or Create a Bucket for storing the DCP and LOG files.
+ Available Bucket(s):
+   (1) hello-fpga1
+ Bucket Name []: hello-fpga2
+@@ -97,13 +100,13 @@ If your do not have any available bucket
+ #### Example 2. Choose an existing OBS bucket ####
+ 
+ <pre>
+-Choose or Create a Bucket for storing the FPGA images to be registered.
++Choose or Create a Bucket for storing the DCP and LOG files.
+ Available Bucket(s):
+   (1) hello-fpga1
+   (2) hello-fpga2
+ Bucket Name []: 2
+ </pre>
+-If you want to use an existing OBS bucket, enter the serial number of the OBS bucket when prompted. For example, if you have two available OBS buckets (**hello-fpga1** and **hello-fpga2**) in the current region and want to use **hello-fpga2** to store the FPGA images to be registered, enter the serial number corresponding to **hello-fpga2**, that is, **2**.
++If you want to use an existing OBS bucket, enter the serial number of the OBS bucket when prompted. For example, if you have two available OBS buckets (**hello-fpga1** and **hello-fpga2**) in the current region and want to use **hello-fpga2** to store the DCP and LOG files, enter the serial number corresponding to **hello-fpga2**, that is, **2**.
+ 
+ > If the name of the bucket to be selected or created conflicts with that in the **Available Bucket(s)** list, add an exclamation mark (!) before the bucket name. That is, use **!mybucket** to indicate that the name of the bucket to be selected or created is **mybucket**.
+ 
+@@ -132,13 +135,41 @@ The format of a fis command is `fis <sub
+ 
+ For details about how to use the fis command, see [fis command Description](#fis-command-description).
+ 
+-## 4.2 Querying FPGA Images ##
+-After registering an FPGA image, you can use the fis query subcommand to query information about FPGA images owned by youself. After the **status** of an FPGA image changes to **active**, you can use the corresponding FPGA image ID to load, delete, and associate the FPGA image.<br/>
++## 4.2 Creating an FPGA Image ##
++
++- Step 1. Run the **AEI_Register.sh** script in the project to create an FPGA image and get an FPGA image ID.
++
++> Creating an FPGA image is an asynchronous process. Successful execution of **step 1** does not mean that the FPGA image was created successfully. You also needs to execute **step 2** until the status of the FPGA image is **active**, indicating that the FPGA image was created successfully.
++
++- Step 2. [Query](#43-querying-fpga-images) the creation progress. The state of the FPGA image changes during the creation. When the state is **active** or **error**, the creation is complete.
++
++> [root@ ~]# fis fpga-image-list --fpga-image-id &lt;FPGA image ID&gt;
++
++- Step 3. When the creation is complete, [getting the corresponding log file](#44-getting-an-log-file).
++
++> [root@ ~]# fis get-log-file --fpga-image-id &lt;FPGA image ID&gt;
++
++## 4.3 Querying FPGA Images ##
++After creating an FPGA image, you can use the fis query subcommand to query information about FPGA images owned by youself.<br/>
+ 
+ > With the fis query subcommand, you can only query information about **FPGA images owned by youself**. For purchased and shared FPGA images, you should use the **fis association query subcommand**. For example, you can refer to [Querying the Shared FPGA Image](#querying-the-shared-fpga-image) to learn how to query the shared FPGA images.
+ 
+ The fis query subcommand displays FPGA image information in a table, and also supports pagination query. For more details, see [Query Subcommand](#query-subcommand).
+ 
++### FPGA Image Status ###
++The FPGA image has the following six states:
++
++| status | Description |
++| ------- | ----------- |
++| **initialling** | Create initialization |
++| **scheduling** | Waiting for schedule creation |
++| **creating** | Creating in progress |
++| **active** | Available |
++| **deleting** | Deleting in progress |
++| **error** | Operation error |
++
++After the **status** of an FPGA image changes to **active**, you can use the corresponding FPGA image ID to load, delete, and associate the FPGA image.
++
+ ### Example ###
+ Run the following command to query FPGA images:
+ <pre>
+@@ -151,12 +182,27 @@ Success: 200 OK
+ +----------------------------------+---------+--------+-----------+------+---------------------+-------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+---------+
+ </pre>
+ - The ID of the FPGA image is **000000\*\*\*\*\*\*08b4015e3224afe203c3**.
+-- The state of the FPGA image is **active**, indicating that image has been registered successfully.
++- The state of the FPGA image is **active**, indicating that image has been created successfully.
+ 
+ Therefore, you can use the ID of the FPGA image to load, delete, or associate the FPGA image.
+ 
+-## 4.3 Deleting an FPGA Image ##
+-An FPGA image can be deleted only by its owner. If a registered FPGA image is no longer used and you want to delete the FPGA image record from the FPGA image management module, you can run a fis deletion subcommand to delete it. In addition, if the **status** of an FPGA image is **error**, you can also use the fis deletion subcommand to delete the FPGA image record. If an FPGA image has been associated with an ECS image, the FPGA image will be **protected** (the value of **protected** is **True**) and cannot be deleted. For more details, see [Deletion Subcommand](#deletion-subcommand).
++## 4.4 Getting an Log File ##
++After the FPGA image is created, you can use the fis get log subcommand to download the corresponding log file. The log file will be saved to the current directory and named in the format of **{FPGA Image ID}_log.tar**.  For more details, see [Get Log Subcommand](#get-log-subcommand). 
++
++### Example ###
++Download the log file of the FPGA image whose ID is **0086137b\*\*\*\*\*\*\*\*016535d03b210005**.
++<pre>
++[root@ ~]# fis get-log-file --fpga-image-id 0086137b********016535d03b210005
++Log directory is "obs-test-fpga:vu9p"
++Downloading Log file from OBS
++Success: 200 OK
++Download 2517 bytes using 0.078489 second(s)
++[root@ ~]# ls
++0086137b********016535d03b210005_log.tar
++</pre>
++
++## 4.5 Deleting an FPGA Image ##
++An FPGA image can be deleted only by its owner. If a created FPGA image is no longer used and you want to delete the FPGA image record from the FPGA image management module, you can run a fis deletion subcommand to delete it. In addition, if the **status** of an FPGA image is **error**, you can also use the fis deletion subcommand to delete the FPGA image record. If an FPGA image has been associated with an ECS image, the FPGA image will be **protected** (the value of **protected** is **True**) and cannot be deleted. For more details, see [Deletion Subcommand](#deletion-subcommand).
+ 
+ ### Confirming the Deletion ###
+ fisclient provides the deletion confirmation function. You need to enter **yes** or **no** to decide whether to perform the deletion.
+@@ -181,10 +227,10 @@ The output of an FPGA image query operat
+ | id                               | name     | status | protected | size | createdAt           | description | metadata                                                                                                                                                                                                                                                                                                                                                                                  | message                    |
+ +----------------------------------+----------+--------+-----------+------+---------------------+-------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+----------------------------+
+ | ff********5056b2015d5e13608c73c7 | OCL_001  | active | False     | 43   | 2017-09-19 02:27:31 | mmult_01    | {"manifest_format_version": "1", "pci_vendor_id": "0x19e5", "pci_device_id": "0xD512", "pci_subsystem_id": "-", "pci_subsystem_vendor_id": "-", "shell_type": "0x121", "shell_version": "0x0001", "hdk_version": "SDx 2017.1", "date": "2017/09/18_18:27:12"}                                                                                                                             |                            |
+-| 4010b39c5d4********48e97411005ae | dpdk_002 | error  | False     | 45   | 2017-09-19 16:39:27 | example_02  | {"manifest_format_version": "1", "pci_vendor_id": "0x19e5", "pci_device_id": "0xD503", "pci_subsystem_id": "-", "pci_subsystem_vendor_id": "-", "dcp_hash": "ced75657********60f212a9454f6c5ae33d50f0a248e99dbef638231b26960c", "shell_type": "0x101", "shell_version": "0x0013", "dcp_file_name": "ul_pr_top_routed.dcp", "hdk_version": "Vivado 2017.2", "date": "2017/09/19_13:51:41"} | register fpga image failed |
++| 4010b39c5d4********48e97411005ae | dpdk_002 | error  | False     | 45   | 2017-09-19 16:39:27 | example_02  | {"manifest_format_version": "1", "pci_vendor_id": "0x19e5", "pci_device_id": "0xD503", "pci_subsystem_id": "-", "pci_subsystem_vendor_id": "-", "dcp_hash": "ced75657********60f212a9454f6c5ae33d50f0a248e99dbef638231b26960c", "shell_type": "0x101", "shell_version": "0x0013", "dcp_file_name": "ul_pr_top_routed.dcp", "hdk_version": "Vivado 2017.2", "date": "2017/09/19_13:51:41"} | create fpga image failed |
+ +----------------------------------+----------+--------+-----------+------+---------------------+-------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+----------------------------+
+ </pre>
+-Perform the following commands to delete the FPGA image no longer used (ID: **ff\*\*\*\*\*\*\*\*5056b2015d5e13608c73c7**), and the FPGA image that fails to be registered (ID: **4010b39c5d4\*\*\*\*\*\*\*\*48e97411005ae**):
++Perform the following commands to delete the FPGA image no longer used (ID: **ff\*\*\*\*\*\*\*\*5056b2015d5e13608c73c7**), and the FPGA image that fails to be created (ID: **4010b39c5d4\*\*\*\*\*\*\*\*48e97411005ae**):
+ 
+ - Delete the FPGA image no longer used.
+ <pre>
+@@ -201,8 +247,8 @@ Success: 204 No Content
+ In these commands, **--fpga-image-id** specifies the ID of the FPGA image to be deleted, **--force** specifies a forcible deletion operation. If the command output is **Success: 204 No Content**, the fis deletion subcommand is executed successfully.<br/>
+ However, the execution success of the deletion subcommand does not necessarily mean that the FPGA image is deleted successfully. You need to perform the query operation. If information about the FPGA image to be deleted is not displayed, the FPGA image has been deleted successfully.
+ 
+-## 4.4 Associating and Disassociating FPGA Images, and Querying Associations ##
+-By associating a registered FPGA image, you can share the FPGA image with other users **in the same region** in the following two scenarios:
++## 4.6 Associating and Disassociating FPGA Images, and Querying Associations ##
++By associating a created FPGA image, you can share the FPGA image with other users **in the same region** in the following two scenarios:
+ 
+ - Marketing Scenario: Publishing the FPGA image in the cloud market for transaction
+ - Sharing Scenario: Sharing the FPGA image with a specified user
+@@ -211,7 +257,7 @@ By querying associations, you can query
+ This section uses the FPGA image sharing scenario as an example to describe how to associate or disassociate an FPGA image, and query associations. For more details about these subcommands, see [Association Subcommand](#association-subcommand), [Disassociation Subcommand](#disassociation-subcommand) and [Association Query Subcommand](#association-query-subcommand).
+ 
+ ### Sharing the FPGA Image ###
+-If user A wants to share a self-owned registered FPGA image with user B, user A needs to perform the following steps. The following assumes that user A wants to share the **general-purpose architecture** FPGA image whose ID is **4010b39c5d4\*\*\*\*\*\*\*\*\*\*f2cf8070c7e** with user B.
++If user A wants to share a self-owned FPGA image with user B, user A needs to perform the following steps. The following assumes that user A wants to share the **general-purpose architecture** FPGA image whose ID is **4010b39c5d4\*\*\*\*\*\*\*\*\*\*f2cf8070c7e** with user B.
+ 
+ - Step 1. Create a private ECS image from an **general-purpose architecture** FPGA Elastic Cloud Server. For more details, see [Creating a Private Linux Image](https://support.huaweicloud.com/en-us/usermanual-ims/en-us_topic_0030713180.html).
+ 
+@@ -232,7 +278,7 @@ If **Success: 204 No Content** is displa
+ 
+ 
+ ### Querying the Shared FPGA Image ###
+-If user B wants to use a registered FPGA image shared by user A, user B needs to perform the following steps.
++If user B wants to use a created FPGA image shared by user A, user B needs to perform the following steps.
+ 
+ - Step 1. Accept the ECS image shared by user A. For more details, see [Accepting the shared image](https://support.huaweicloud.com/en-us/usermanual-ims/en-us_topic_0032042420.html).
+ - Step 2. Obtain the type of the FPGA image from user A. In this example, it is **general-purpose architecture**.
+@@ -280,16 +326,16 @@ Command-line interface to the fis API.
+ positional arguments: 
+   &lt;subcommand&gt; 
+     configure           Invoke interactive (re)configuration tool
++    fpga-image-create   Create an FPGA image
+     fpga-image-delete   Delete an FPGA image
+     fpga-image-list     Query FPGA images of a tenant
+-    fpga-image-register
+-                        Register an FPGA image
+     fpga-image-relation-create
+                         Create the relation of an FPGA image and an ECS image
+     fpga-image-relation-delete
+                         Delete the relation of an FPGA image and an ECS image
+     fpga-image-relation-list
+                         Query FPGA image relations visible to a tenant
++    get-log-file        Get the log file of an FPGA image
+     help                Display help about fis or one of its subcommands
+ 
+ See "fis help COMMAND" for help on a specific command.
+@@ -300,21 +346,20 @@ The format of a fis command is `fis <sub
+ - **&lt;subcommand&gt;** specifies the function of the command.
+ - **&lt;option&gt;** is unique to the subcommand and specifies command parameters for the subcommand.
+ 
+-fis commands include eight subcommands.
++fis commands include the following subcommands.
+ 
+ | Command | Description |
+ | ------- | ----------- |
+ | **configure** | Configuration subcommand, used to invoke interactive configuration tool. |
++| **fpga-image-create** | Creation subcommand, used to create an FPGA image. |
+ | **fpga-image-delete** | Deletion subcommand, used to delete an FPGA image. |
+ | **fpga-image-list** | Query subcommand, used to query FPGA images of a tenant. |
+-| **fpga-image-register** | Registration subcommand, used to register an FPGA image. |
+ | **fpga-image-relation-create** | Association subcommand, used to associate an FPGA image with an ECS image. |
+ | **fpga-image-relation-delete** | Disassociation subcommand, used to disassociate an FPGA image from an ECS image. |
+ | **fpga-image-relation-list** | Association query subcommand, used to query the associations between FPGA images and ECS images visible to a tenant. |
++| **get-log-file** | Get log subcommand，used to get the log file of an FPGA image |
+ | **help** | Help subcommand, used to display the help information of the fis command or fis subcommands. |
+ 
+-> The fis registration subcommand **fpga-image-register** is automatically invoked when you run the **AEI_Register.sh** script. You do not need to run this command to register an FPGA image.
+-
+ <a name="deletion-subcommand"></a>
+ ## 5.2 Deletion Subcommand ##
+ The deletion subcommand is used to delete an FPGA image from the FPGA image management module. After an FPGA image is deleted successfully, loading, association, deletion operations and so on cannot be performed on the FPGA image.
+@@ -369,15 +414,17 @@ Success: 204 No Content
+ The query subcommand displays the FPGA images of a tenant in a table. The subcommand also supports pagination query.
+ 
+ ### Format ###
+-**fis fpga-image-list** **[--page** *&lt;Int&gt;***] [--size** *&lt;Int&gt;***]**
++**fis fpga-image-list [--fpga-image-id** *&lt;UUID&gt;***]** **[--page** *&lt;Int&gt;***] [--size** *&lt;Int&gt;***]**
+ 
+ ### Parameters ###
+ | Parameter | Description | Value | Remarks |
+ | --------- | ----------- | ----- | ------- |
+-| **--page** | Specifies the page number for pagination query. This parameter is optional. | The value of **page** is a decimal integer between [1,65535) and cannot contain +. | Specified by the user. |
+-| **--size** | Specifies the size of a page for pagination query. This parameter is optional. | The value of **size** is a decimal integer between [1,100] and cannot contain +. | Specified by the user. |
++| **--fpga-image-id** | Specifies the ID of the FPGA image to be queried. This parameter is optional. | The value of **fpga-image-id** is a string of 32 characters, including lowercase letters a to f and digits 0 to 9. | - |
++| **--page** | Specifies the page number for pagination query. This parameter is optional. | The value of **page** is a decimal integer between [1,65535) and cannot contain +. | - |
++| **--size** | Specifies the size of a page for pagination query. This parameter is optional. | The value of **size** is a decimal integer between [1,100] and cannot contain +. | - |
+ 
+-> **page** and **size** must be used together and only when both parameters are set is pagination query available.
++> **page** and **size** must be used together and only when both parameters are set is pagination query available.<br/>
++> When **fpga-image-id** is set, **page** and **size** are unavailable.
+ 
+ ### Usage Guidelines ###
+ If the command output is **Success: 200 OK**, the query subcommand is executed successfully. The response information is presented in a table with the following headers.
+@@ -392,7 +439,7 @@ The following table describes the table
+ | --------- | ----------- |
+ | **id** | Specifies the FPGA image ID. |
+ | **name** | Specifies the FPGA image name. |
+-| **status** | Specifies the FPGA image status. |
++| **status** | Specifies the FPGA image status.<br/>Options:<br/>initialling, scheduling, creating, active, deleting, error |
+ | **protected** | Specifies whether an FPGA image is protected. |
+ | **size** | Specifies the size of the FPGA image, in MB. |
+ | **createdAt** | Specifies the time (UTC) when the FPGA image was created. |
+@@ -539,8 +586,8 @@ The association query subcommand lists t
+ | --------- | ----------- | ----- | ------- |
+ | **--fpga-image-id** | Specifies the ID of the FPGA image whose association is to be queried. This parameter is optional. | The value of **fpga-image-id** is a string of 32 characters, including lowercase letters a to f and digits 0 to 9. | You can check the ID of an FPGA image in the output of a query subcommand. |
+ | **--image-id** | Specifies the ID of the ECS image whose association is to be queried. This parameter is optional. | **image-id** complies with IMS image ID rules. | You can get the image ID on the details page of the IMS image. |
+-| **--page** | Specifies the page number for pagination query. This parameter is optional. | The value of **page** is a decimal integer between [1,65535) and cannot contain +. | Specified by the user. |
+-| **--size** | Specifies the size of a page for pagination query. This parameter is optional. | The value of **size** is a decimal integer between [1,100] and cannot contain +. | Specified by the user. |
++| **--page** | Specifies the page number for pagination query. This parameter is optional. | The value of **page** is a decimal integer between [1,65535) and cannot contain +. | - |
++| **--size** | Specifies the size of a page for pagination query. This parameter is optional. | The value of **size** is a decimal integer between [1,100] and cannot contain +. | - |
+ 
+ > The FPGA image relations can only be obtained if at least one of the **fpga-image-id** and **image-id** is specified, otherwise only an empty list is returned.<br/>
+ > **page** and **size** must be used together and only when both parameters are set is pagination query available.<br/>
+@@ -560,7 +607,7 @@ The following table describes the table
+ | **image_id** | Specifies the ECS image ID. |
+ | **fpga_image_id** | Specifies the FPGA image ID. |
+ | **name** | Specifies the FPGA image name. |
+-| **status** | Specifies the FPGA image status. |
++| **status** | Specifies the FPGA image status.<br/>Options:<br/>initialling, scheduling, creating, active, deleting, error |
+ | **protected** | Specifies whether an FPGA image is protected. |
+ | **size** | Specifies the size of the FPGA image, in MB. |
+ | **createdAt** | Specifies the time (UTC) when the FPGA image was created. |
+@@ -598,3 +645,44 @@ Success: 200 OK
+ | 404223ca-8**b-4**2-a**e-d187****61bc | 00000000********015e97f6408d01cd | OCL_001  | active | True      | 43   | 2017-09-18 02:37:31 | mmult_01    | {"manifest_format_version": "1", "pci_vendor_id": "0x19e5", "pci_device_id": "0xD512", "pci_subsystem_id": "-", "pci_subsystem_vendor_id": "-", "shell_type": "0x121", "shell_version": "0x0001", "hdk_version": "SDx 2017.1", "date": "2017/09/17_18:37:12"}                                                                                                                             |         |
+ +--------------------------------------+----------------------------------+----------+--------+-----------+------+---------------------+-------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+---------+
+ </pre>
++
++<a name="get-log-subcommand"></a>
++## 5.7 Get Log Subcommand ##
++You can use the get log subcommand to download the log file of an FPGA image.
++
++### Format ###
++**fis get-log-file --fpga-image-id** *&lt;UUID&gt;*
++
++### Parameters ###
++| Parameter | Description | Value | Remarks |
++| --------- | ----------- | ----- | ------- |
++| **--fpga-image-id** | Specifies the ID of the FPGA image of the log file to be downloaded. This parameter is mandatory. | The value of **fpga-image-id** is a string of 32 characters, including lowercase letters a to f and digits 0 to 9. | You can check the ID of an FPGA image in the output of a query subcommand. |
++
++### Usage Guidelines ###
++If the command output is **Success: 200 OK**, the get log subcommand is executed successfully. In this case, the log file will be saved to the current directory and named in the format of **{FPGA Image ID}_log.tar**, for example **0086137b\*\*\*\*\*\*\*\*016535d03b210005_log.tar**.
++
++<br/>
++If a get log subcommand fails to be executed, the response information contains failure causes.
++
++- Example
++<pre>
++[root@ ~]# fis get-log-file --fpga-image-id 0086137b\*\*\*\*\*\*\*\*0165332ab1280031
++Log directory is "obs-test-fpga:vu9p/log"
++Downloading Log file from OBS
++Error: 404 Not Found
++The specified key does not exist., Code=NoSuchKey, RequestId=00010F4B\*\*\*\*\*\*\*\*6535EA40A1CEAELK, Function=get_log_file, Arguments=(u'obs-test-fpga', u'vu9p/log/0086137b\*\*\*\*\*\*\*\*0165332ab1280031_log.tar')
++Tips: The log file may have NOT been generated, or have been Deleted or Moved.
++</pre>
++The error information shows that the log file may have not been generated, or have been deleted or moved.
++
++### Example ###
++Download the log file of the FPGA image whose ID is **0086137b\*\*\*\*\*\*\*\*016535d03b210005**.
++<pre>
++[root@ ~]# fis get-log-file --fpga-image-id 0086137b********016535d03b210005
++Log directory is "obs-test-fpga:vu9p"
++Downloading Log file from OBS
++Success: 200 OK
++Download 2517 bytes using 0.078489 second(s)
++[root@ ~]# ls
++0086137b********016535d03b210005_log.tar
++</pre>
+diff -uprN fisclient-2.1.0/setup.py fisclient-2.2.0/setup.py
+--- fisclient-2.1.0/setup.py	2018-08-22 12:21:15.000000000 +0800
++++ fisclient-2.2.0/setup.py	2018-09-03 21:20:55.000000000 +0800
+@@ -28,7 +28,7 @@ requires = [
+ 
+ setup(
+     name='fisclient',
+-    version='2.1.0',
++    version='2.2.0',
+     description='FIS API Client',
+     long_description=long_description,
+     license='Apache License, Version 2.0',
