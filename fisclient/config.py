@@ -39,9 +39,6 @@ az_region_map = {
     'cn-south-1a': 'cn-south-1',
     'cn-south-2b': 'cn-south-1',
     'cn-south-1c': 'cn-south-1',
-    'az1.dc1': 'southchina',
-    'kvmxen.dc1': 'southchina',
-    'eu-de-02': 'eu-de',
 }
 
 endpoints = {
@@ -66,26 +63,6 @@ endpoints = {
         'fis': 'ecs.cn-east-2.myhuaweicloud.com',
         'dns': ['100.125.17.29', '100.125.135.29']
     },
-    'southchina': {
-        'obs': 'obs.cn-north-1.myhwclouds.com',
-        'iam': 'iam.cn-north-1.myhuaweicloud.com',
-        'vpc': 'vpc.cn-north-1.myhuaweicloud.com',
-        'fis': 'ecs.cn-north-1.myhuaweicloud.com',
-        'dns': ['100.125.1.202', '100.125.1.230']
-    },
-    'eu-de': {
-        'obs': 'obs.eu-de.otc.t-systems.com',
-        'iam': 'iam.eu-de.otc.t-systems.com',
-        'vpc': 'vpc.eu-de.otc.t-systems.com',
-        'fis': 'ecs.eu-de.otc.t-systems.com',
-        'dns': ['100.125.1.53', '100.125.1.54']
-    },
-    'cn-global-1-a': {
-        'obs': '192.168.26.20',
-        'iam': '128.6.147.250',
-        'vpc': '128.6.147.250',
-        'fis': '128.6.147.250',
-    }
 }
 
 
