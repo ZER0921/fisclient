@@ -139,7 +139,8 @@ For details about how to use the fis command, see [fis command Description](#fis
 
 - Step 1. Run the **AEI_Register.sh** script in the project to create an FPGA image and get an FPGA image ID.
 
-> Creating an FPGA image is an asynchronous process. Successful execution of **step 1** does not mean that the FPGA image was created successfully. You also needs to execute **step 2** until the status of the FPGA image is **active**, indicating that the FPGA image was created successfully.
+> Quotas: A single tenant can create at most **one** FPGA image at a time. When a tenant attempts to create multiple FPGA images at the same time, the creation will fail.<br/>
+> Asynchronous creation: Creating an FPGA image is an asynchronous process. Successful execution of **step 1** does not mean that the FPGA image was created successfully. You also needs to execute **step 2** until the status of the FPGA image is **active**, indicating that the FPGA image was created successfully.
 
 - Step 2. [Query](#43-querying-fpga-images) the creation progress. The state of the FPGA image changes during the creation. When the state is **active** or **error**, the creation is complete.
 
