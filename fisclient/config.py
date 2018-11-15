@@ -44,21 +44,21 @@ az_region_map = {
 endpoints = {
     'cn-north-1': {
         'obs': 'obs.cn-north-1.myhwclouds.com',
-        'iam': 'iam.cn-north-1.myhuaweicloud.com',
+        'iam': 'iam.myhuaweicloud.com',
         'vpc': 'vpc.cn-north-1.myhuaweicloud.com',
         'fis': 'ecs.cn-north-1.myhuaweicloud.com',
         'dns': ['100.125.1.250', '100.125.21.250']
     },
     'cn-south-1': {
         'obs': 'obs.cn-south-1.myhwclouds.com',
-        'iam': 'iam.cn-south-1.myhuaweicloud.com',
+        'iam': 'iam.myhuaweicloud.com',
         'vpc': 'vpc.cn-south-1.myhuaweicloud.com',
         'fis': 'ecs.cn-south-1.myhuaweicloud.com',
         'dns': ['100.125.1.250', '100.125.136.29']
     },
     'cn-east-2': {
         'obs': 'obs.cn-east-2.myhwclouds.com',
-        'iam': 'iam.cn-east-2.myhuaweicloud.com',
+        'iam': 'iam.myhuaweicloud.com',
         'vpc': 'vpc.cn-east-2.myhuaweicloud.com',
         'fis': 'ecs.cn-east-2.myhuaweicloud.com',
         'dns': ['100.125.17.29', '100.125.135.29']
