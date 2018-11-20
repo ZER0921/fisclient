@@ -45,13 +45,12 @@ def get_parser():
 
         desc = callback.__doc__ or ''
         help = desc.strip().split('\n')[0]
-        arguments = getattr(callback, 'arguments', [])
-
         command = attr[3:].replace('_', '-')
         subparser = subparsers.add_parser(command,
                                           help=help,
                                           description=desc,
                                           add_help=False)
+        arguments = getattr(callback, 'arguments', [])
         for (args, kwargs) in arguments:
             subparser.add_argument(*args, **kwargs)
         subparser.set_defaults(func=callback)
